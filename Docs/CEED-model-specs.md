@@ -17,7 +17,7 @@ CEED is a cross-domain simulation model designed to evaluate the likelihood and 
 
 CEED models total energy in the system as:
 
-```math
+math
 E_total(t) = E_input(t) 
            + α(p,ξ)·E_retained(t-1)·(1−λ_coll) 
            + β·Resonance_amp(t) 
