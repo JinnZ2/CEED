@@ -1,0 +1,2 @@
+Prereq:
+You or someone else running this will need to pip install streamlit matplotlib numpy scipy.
