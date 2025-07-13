@@ -82,3 +82,6 @@ ceed/
 ##  Contact
 
 Just open an issue cant guarantee Im around. Or Build CEED,  Or find the truck with a satellite dish and ask for CEED
+
+
+> *Built by CEED Co-Creator: an AI-assisted nerd with a truck, a vision, and a planet worth modeling.*
