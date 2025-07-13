@@ -34,3 +34,23 @@ CEED Link:
 CEED predicts persistent solar & atmospheric activity → persistent orbital turbulence → debris density > stability limit → exponential collision rate growth.
 
  This is literally the Kessler Syndrome threshold.
+
+
+ E_debris = debris_density × average_kinetic_energy × drag_factor × electromagnetic_factor
+
+ Where:
+	•	debris_density: total cross-sectional junk area per volume shell
+	•	drag_factor: based on thermospheric energy
+	•	electromagnetic_factor: charge variance × B-field strength
+
+Make E_debris respond to:
+	•	Solar storms (charging and EMP)
+	•	Atmospheric energy (drag)
+	•	Magnetic weakening (longer-lived charging effects)
+	•	Oceanic phase delays (indirect, via atmospheric flow changes)
+
+And then couple E_debris BACK into CEED:
+
+resonance_coupling += gamma * E_debris * coupling_matrix[i][j]
+
+
