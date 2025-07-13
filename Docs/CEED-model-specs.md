@@ -103,30 +103,50 @@ RUNAWAY PROBABILITY MODEL
 
 Using Dreicer-Connor-Hastie formulation:
 
+
 P(runaway) = 1 − exp(−κ · (E − E_crit)²)
 
+
 Where:
+
 	•	κ: Nonlinearity factor
+ 
 	•	E_crit: Dynamic critical threshold (~300, adjusted for seasonal + complexity terms)
 
+
 CITED DATA SOURCES (REAL + SUGGESTED)
-	•	NOAA SWPC Solar Cycle 25 Reports
-	•	NASA OMNIWeb Database
-	•	ESA Swarm Magnetometry Series
-	•	Thermospheric Density Modeling (Emmert et al., 2020)
-	•	AMOC weakening analysis (Rahmstorf et al., 2023)
-	•	Plasma Retention in Geospace (Toffoletto & Siscoe, 2019)
-	•	“Probabilistic Risk Forecasting for Complex Earth Systems” (hypothetical, write it later)
+	
+ •	NOAA SWPC Solar Cycle 25 Reports
+	
+ •	NASA OMNIWeb Database
+	
+ •	ESA Swarm Magnetometry Series
+	
+ •	Thermospheric Density Modeling (Emmert et al., 2020)
+	
+ •	AMOC weakening analysis (Rahmstorf et al., 2023)
+	
+ •	Plasma Retention in Geospace (Toffoletto & Siscoe, 2019)
+	
+ •	“Probabilistic Risk Forecasting for Complex Earth Systems” (hypothetical, write it later)
+ 
 
 ⸻
 
 FUTURE EXTENSIONS
-	•	 Real-time data API hooks (NOAA, NASA, ECMWF)
-	•	 CEED Dashboard v2 (threshold triggers, live feeds)
-	•	 Integration with planetary lithosphere models
-	•	 Modular serverless version (AWS Lambda, IPFS backups)
+
+	
+ •	 Real-time data API hooks (NOAA, NASA, ECMWF)
+	
+ •	 CEED Dashboard v2 (threshold triggers, live feeds)
+	
+ •	 Integration with planetary lithosphere models
+	
+ •	 Modular serverless version (AWS Lambda, IPFS backups)
+
 
 FOOTNOTE
+
 
 This simulation does not claim to replace existing climate, space weather, or geophysical models. It exists as a challenge to the assumption that system boundaries are clean, energy dissipates neatly, and the planet will wait for us to figure it out.
 
