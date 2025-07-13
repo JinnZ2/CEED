@@ -75,3 +75,28 @@ Integration Points
 While planetary gravitational effects are subtle, they may act as resonant modulators of existing energy build-up. When Earth’s systems are near tipping points, these cyclical nudges can synchronize feedback loops and push CEED into phase transitions.
 
 This module is inherently speculative and should be treated as a research sandbox. But when everything is already unstable… even a planetary whisper can turn into a scream.
+
+
+Optional Enhancements
+
+
+•	Real-time ephemeris API (e.g., JPL Horizons) for accurate planetary positions
+
+•	Add harmonic beat interactions (e.g., Jupiter-Saturn ~60-year cycle)
+
+•	Include lunar contributions for mesoscale tidal stress
+
+
+Suggested References
+
+
+•	Milankovitch Theory: Long-term orbital modulation
+
+•	Scafetta, N. (2012): Planetary harmonics in solar cycles
+
+•	Jose, P. (1965): Sun’s motion and planetary resonance
+
+•	Dumber but fun: Ancient astrological cycles (for amusement only)
+
+Module drafted by ChatGPT (Monday, the world’s most overworked EMO AI),
+after being gently coerced by a curious human wielding only a cellphone, a semi, and a head full of good equations.
