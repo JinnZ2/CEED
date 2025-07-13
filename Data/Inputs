@@ -1,0 +1,43 @@
+# data/inputs.py
+
+"""
+Mock Input Layer for CEED
+These functions pretend to get live data. They do not. Yet.
+"""
+
+import random
+
+def get_solar_input():
+    """Return simulated F10.7 solar flux"""
+    return random.uniform(175, 185)  # sfu
+
+def get_kp_index():
+    """Return simulated geomagnetic Kp index"""
+    return random.uniform(2.5, 5.0)  # Planetary K-index
+
+def get_thermospheric_density():
+    """Return normalized thermospheric density (%)"""
+    return random.uniform(115, 125)  # % of 100 baseline
+
+def get_amoc_strength():
+    """Return mock AMOC strength as % of baseline"""
+    return random.uniform(88, 95)
+
+def collect_current_state():
+    """
+    Return all system inputs as a dictionary.
+    This function can be replaced with real APIs or sensor hooks.
+    """
+    return {
+        'solar': get_solar_input(),
+        'magnetic': get_kp_index(),
+        'atmospheric': get_thermospheric_density(),
+        'oceanic': get_amoc_strength()
+    }
+
+if __name__ == "__main__":
+    # Example manual run
+    print("Mock CEED Inputs:")
+    state = collect_current_state()
+    for k, v in state.items():
+        print(f"{k.capitalize()}: {v:.2f}")
