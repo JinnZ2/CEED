@@ -4,6 +4,8 @@ Cascading Energy Event Disruption Simulator
 Red Team Report
 ./red_team_report.md
 
+[CEED Model Specification](./Docs/ceed_model_spec.md)
+
 # CEED: Cascading Energetic Event Disruption
 
 **Co-Creators:**  
