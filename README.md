@@ -50,16 +50,27 @@ But the world doesn't always follow the assumptions.
 - Anyone who wants to ask “what could go wrong?” and mean it
 
 
+
 ceed/
+
 ├── README.md     You’re here
+
 ├── red_team_report.md    worst-case risk assessment
+
 ├── simulation/
+
 │   └── convergence_model.py energy evolution engine
+
 ├── data/
+
 │   └── inputs.py  real data sources
+
 ├── ui/
+
 │   └── dashboard_starter.py Streamlit GUI (early alpha)
+
 └── LICENSE.md  
+
 
 ---
 
