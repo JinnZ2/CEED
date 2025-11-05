@@ -1,0 +1,65 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+
+.ipynb_checkpoints/
+*.ipynb
+
+# Data files (if large)
+
+*.csv
+*.hdf5
+*.nc
+
+# Plots and outputs
+
+*.png
+*.pdf
+*.jpg
+plots/
+outputs/
+
+# OS
+
+.DS_Store
+Thumbs.db
+
+# Documentation builds
+
+docs/_build/
