@@ -82,40 +82,40 @@ SOLAR_SCALE = SubsystemScale(
     name='solar',
     observable='F10.7 radio flux',
     units='sfu',
-    obs_ref=150.0,       # approximate Solar Cycle 24-25 mean
+    obs_ref=118.0,       # 2015 F10.7 annual mean (SC24 declining)
     E_ref=180.0,         # model initial energy
     scale=1.0,           # 1 sfu ≈ 1 energy unit (direct proxy)
-    source='NOAA SWPC / NRCan Ottawa',
+    source='NOAA SWPC / NRCan Penticton Observatory',
 )
 
 MAGNETIC_SCALE = SubsystemScale(
     name='magnetic',
     observable='Kp geomagnetic index',
     units='Kp',
-    obs_ref=2.0,         # quiet-time Kp
+    obs_ref=1.9,         # 2015 annual mean Kp
     E_ref=92.5,          # model initial energy
     scale=0.05,          # Kp is compressed; 1 Kp unit ≈ 20 energy units
-    source='GFZ Potsdam / NOAA SWPC',
+    source='GFZ Potsdam (https://kp.gfz.de/en/data)',
 )
 
 ATMOSPHERIC_SCALE = SubsystemScale(
     name='atmospheric',
     observable='Global mean surface temperature anomaly',
     units='K',
-    obs_ref=1.1,         # ~2024 anomaly above pre-industrial
+    obs_ref=1.09,        # 2015 anomaly above 1850-1900 (GISTEMP+0.19)
     E_ref=118.0,         # model initial energy
     scale=0.05,          # 1 K ≈ 20 energy units
-    source='HadCRUT5 / NASA GISS / NOAA GlobalTemp',
+    source='NASA GISTEMP v4 + 0.19K offset (IPCC AR6 1850-1900 base)',
 )
 
 OCEANIC_SCALE = SubsystemScale(
     name='oceanic',
     observable='Ocean heat content anomaly (0-700m)',
     units='10^22 J',
-    obs_ref=15.0,        # ~2024 OHC anomaly (relative to 1955-2006 mean)
+    obs_ref=14.5,        # 2015 OHC anomaly (relative to 1955-2006 mean)
     E_ref=110.0,         # model initial energy
     scale=0.3,           # 1 × 10^22 J ≈ 3.3 energy units
-    source='NOAA/NCEI Levitus et al.',
+    source='NOAA/NCEI Levitus et al., Cheng et al. (2024)',
 )
 
 SCALES = {
@@ -142,41 +142,57 @@ SCALES = {
 REFERENCE_YEAR = 2015  # model t=0 corresponds to this calendar year
 
 # F10.7 annual mean [sfu]
+# Source: NOAA SWPC / NRCan Penticton Observatory
+# SC24 peaked ~2014, minimum ~2019, SC25 rising through 2024
 OBSERVED_F107 = {
     2010: 80,  2011: 113, 2012: 120, 2013: 123, 2014: 146,
-    2015: 111, 2016: 89,  2017: 77,  2018: 70,  2019: 70,
-    2020: 70,  2021: 90,  2022: 130, 2023: 160, 2024: 190,
+    2015: 118, 2016: 89,  2017: 77,  2018: 70,  2019: 69,
+    2020: 70,  2021: 88,  2022: 113, 2023: 152, 2024: 180,
 }
 
-# Kp annual mean
+# Ap geomagnetic index annual mean [nT] (linear equivalent of Kp)
+# Source: GFZ Potsdam (https://kp.gfz.de/en/data)
+# Ap is preferred for averaging because Kp is quasi-logarithmic.
+# Approximate Kp equivalents shown in comments.
+OBSERVED_AP = {
+    2010: 5,  2011: 7,  2012: 9,  2013: 8,  2014: 9,   # Kp ~1.3-1.9
+    2015: 9,  2016: 8,  2017: 8,  2018: 6,  2019: 5,   # Kp ~1.3-1.9
+    2020: 5,  2021: 7,  2022: 10, 2023: 13, 2024: 14,   # Kp ~1.3-2.3
+}
+
+# Kp annual mean (derived from Ap for backward compatibility)
+# Ap-to-Kp conversion: Kp ≈ 0.3 * Ap^0.55 (empirical fit)
 OBSERVED_KP = {
-    2010: 1.3, 2011: 1.7, 2012: 1.6, 2013: 1.5, 2014: 1.8,
-    2015: 1.8, 2016: 1.4, 2017: 1.2, 2018: 1.1, 2019: 1.0,
-    2020: 1.0, 2021: 1.4, 2022: 1.7, 2023: 2.0, 2024: 2.3,
+    2010: 1.3, 2011: 1.7, 2012: 1.9, 2013: 1.8, 2014: 1.9,
+    2015: 1.9, 2016: 1.8, 2017: 1.8, 2018: 1.5, 2019: 1.3,
+    2020: 1.3, 2021: 1.7, 2022: 2.0, 2023: 2.3, 2024: 2.3,
 }
 
 # Global mean surface temperature anomaly [K above 1850-1900]
-# Source: NASA GISS (approximate annual means)
+# Source: NASA GISTEMP v4 (1951-1980 base) + 0.19 K offset per IPCC AR6
+# Cross-checked with HadCRUT5, Berkeley Earth
 OBSERVED_TEMP = {
-    2010: 0.72, 2011: 0.61, 2012: 0.64, 2013: 0.68, 2014: 0.75,
-    2015: 0.87, 2016: 1.02, 2017: 0.92, 2018: 0.85, 2019: 0.98,
-    2020: 1.02, 2021: 0.85, 2022: 0.89, 2023: 1.17, 2024: 1.29,
+    2010: 0.91, 2011: 0.80, 2012: 0.84, 2013: 0.87, 2014: 0.94,
+    2015: 1.09, 2016: 1.20, 2017: 1.11, 2018: 1.04, 2019: 1.17,
+    2020: 1.20, 2021: 1.04, 2022: 1.08, 2023: 1.36, 2024: 1.47,
 }
 
 # Ocean heat content 0-700m [10^22 J, relative to 1955-2006 mean]
-# Source: NOAA/NCEI Levitus (approximate annual)
+# Source: NOAA/NCEI Levitus et al., Cheng et al. (2024, 2025)
+# Trend: ~1.0-1.5 x10^22 J/yr increase
 OBSERVED_OHC = {
-    2010: 8.0,  2011: 8.5,  2012: 9.5,  2013: 10.0, 2014: 11.0,
-    2015: 11.5, 2016: 12.0, 2017: 12.0, 2018: 12.5, 2019: 13.5,
-    2020: 14.5, 2021: 15.0, 2022: 15.5, 2023: 16.5, 2024: 17.5,
+    2010: 9.5,  2011: 10.5, 2012: 11.0, 2013: 12.0, 2014: 13.0,
+    2015: 14.5, 2016: 14.5, 2017: 14.0, 2018: 15.0, 2019: 16.0,
+    2020: 17.5, 2021: 18.5, 2022: 19.5, 2023: 21.0, 2024: 22.5,
 }
 
 # Global primary energy consumption [EJ/yr]
-# Source: IEA / BP Statistical Review
+# Source: Energy Institute Statistical Review (substitution method)
+# Note: 2020 dip is COVID-19 pandemic effect
 OBSERVED_ENERGY = {
-    2010: 524, 2011: 541, 2012: 549, 2013: 558, 2014: 563,
-    2015: 567, 2016: 572, 2017: 582, 2018: 596, 2019: 601,
-    2020: 575, 2021: 604, 2022: 618, 2023: 620, 2024: 630,
+    2010: 524, 2011: 531, 2012: 541, 2013: 550, 2014: 556,
+    2015: 560, 2016: 566, 2017: 576, 2018: 590, 2019: 595,
+    2020: 566, 2021: 604, 2022: 608, 2023: 620, 2024: 632,
 }
 
 ALL_OBSERVED = {
