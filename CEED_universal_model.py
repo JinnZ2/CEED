@@ -1,316 +1,292 @@
-“””
+"""
 Universal CEED Framework
-Abstract feedback architecture applicable across domains
+Domain-agnostic feedback architecture for modelling energy accumulation
+in coupled systems (climate, finance, ecosystems, etc.).
 
-Domains: Climate, Finance, Ecosystems, Societies, AI Systems
-“””
+Core ODE for total system energy E:
+
+    dE/dt = F_ext(t) + sum_k f_k(E) - D(E)
+
+where:
+    F_ext(t) : external forcing [energy/time]
+    f_k(E)   : k-th feedback contribution [energy/time]
+             positive feedback: f_k = +s_k * E * sigma(E, E_sat_k)
+             negative feedback: f_k = -s_k * E * sigma(E, E_sat_k)
+    D(E)     : dissipation [energy/time]
+    sigma(E, E_sat) = 1 / (1 + (E / E_sat)^2)  [dimensionless saturation]
+
+Buffer capacity B depletes when E > E_warn:
+
+    dB/dt = -b * (E / E_warn) * B   when E > E_warn, else 0
+"""
 
 from dataclasses import dataclass
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Optional
 import numpy as np
+
 
 @dataclass
 class FeedbackLoop:
-“”“Represents a single feedback mechanism”””
-name: str
-polarity: str  # ‘positive’ or ‘negative’
-strength: float
-saturation_threshold: float = None
+    """A single feedback mechanism.
 
-```
-def apply(self, state: float, external_forcing: float = 0.0) -> float:
-    """Apply feedback to current state"""
-    if self.saturation_threshold and abs(state) > self.saturation_threshold:
-        # Feedback saturates
-        effective_strength = self.strength * (1 - (abs(state) / (self.saturation_threshold * 2)))
-        effective_strength = max(0.1 * self.strength, effective_strength)
-    else:
-        effective_strength = self.strength
-    
-    if self.polarity == 'positive':
-        return state * (1 + effective_strength) + external_forcing
-    else:  # negative feedback
-        return state * (1 - effective_strength) + external_forcing
-```
+    Attributes:
+        name: Human-readable label.
+        polarity: 'positive' (amplifying) or 'negative' (damping).
+        strength: Feedback gain coefficient s_k [1/time].
+        saturation_energy: Energy scale where feedback saturates [energy].
+            None means no saturation (linear feedback).
+    """
+    name: str
+    polarity: str
+    strength: float
+    saturation_energy: Optional[float] = None
+
+    def rate(self, E: float) -> float:
+        """Compute feedback contribution to dE/dt [energy/time].
+
+        f_k(E) = (+/-) s_k * E * sigma(E)
+
+        where sigma = 1/(1 + (E/E_sat)^2) if saturating, else 1.
+        """
+        sigma = 1.0
+        if self.saturation_energy is not None and self.saturation_energy > 0:
+            sigma = 1.0 / (1.0 + (E / self.saturation_energy) ** 2)
+
+        sign = 1.0 if self.polarity == 'positive' else -1.0
+        return sign * self.strength * E * sigma
+
 
 @dataclass
 class SystemState:
-“”“Current state of a CEED system”””
-energy: float  # Total system energy/stress level
-retention: float  # How well system holds energy
-dissipation: float  # How fast energy leaves
-buffer_capacity: float  # Shock absorption remaining
+    """Instantaneous state of a CEED system.
 
-```
-def stability_metric(self) -> float:
+    Attributes:
+        energy: Total system energy [energy units].
+        buffer_capacity: Remaining shock absorption capacity [0, 1].
     """
-    Returns stability score
-    > 1.0: System accumulating energy (unstable)
-    ~ 1.0: Balanced
-    < 1.0: System dissipating (stable)
-    """
-    return self.retention / self.dissipation if self.dissipation > 0 else float('inf')
+    energy: float
+    buffer_capacity: float = 1.0
 
-def distance_to_tipping_point(self, threshold: float) -> float:
-    """How close to critical threshold"""
-    return (threshold - self.energy) / threshold
-```
 
 class CEEDSystem:
-“””
-Universal framework for modeling feedback-driven systems
+    """Universal framework for feedback-driven energy accumulation.
 
-```
-Core Principle: Runaway occurs when:
-1. Retention > Dissipation
-2. Negative feedbacks saturate
-3. Buffer capacity depletes
-"""
+    The system evolves via:
+        dE/dt = F_ext(t) + sum_k f_k(E) - D(E)
 
-def __init__(self, name: str):
-    self.name = name
-    self.feedbacks: List[FeedbackLoop] = []
-    self.state = SystemState(
-        energy=0.0,
-        retention=1.0,
-        dissipation=1.0,
-        buffer_capacity=1.0
-    )
-    
-    # Thresholds
-    self.warning_threshold = 100.0
-    self.critical_threshold = 200.0
-    self.tipping_point = 300.0
-    
-def add_feedback(self, feedback: FeedbackLoop):
-    """Add a feedback loop to the system"""
-    self.feedbacks.append(feedback)
+    Runaway occurs when positive feedbacks exceed dissipation:
+        sum(positive f_k) > D(E) + sum(|negative f_k|)
+    """
 
-def compute_retention(self, energy: float) -> float:
-    """
-    Compute retention factor based on current energy
-    
-    Key insight: Retention typically drops at high energy
-    (High-energy states are harder to maintain)
-    """
-    base_retention = 1.05  # Slight accumulation at low energy
-    collapse_rate = 0.001  # How fast retention drops
-    
-    return base_retention * np.exp(-collapse_rate * energy**2)
+    def __init__(self, name: str):
+        self.name = name
+        self.feedbacks: List[FeedbackLoop] = []
+        self.state = SystemState(energy=0.0, buffer_capacity=1.0)
 
-def compute_dissipation(self, energy: float) -> float:
-    """
-    Compute dissipation based on current energy
-    
-    Typically increases nonlinearly with energy
-    """
-    linear_term = 0.05 * energy
-    nonlinear_term = 0.001 * energy**1.5
-    
-    return linear_term + nonlinear_term
+        # Phase thresholds [energy units]
+        self.warning_threshold = 100.0
+        self.critical_threshold = 200.0
+        self.tipping_point = 300.0
 
-def apply_feedbacks(self, external_forcing: float = 0.0) -> float:
-    """Apply all feedback loops to current state"""
-    net_effect = self.state.energy
-    
-    for feedback in self.feedbacks:
-        net_effect = feedback.apply(net_effect, external_forcing)
-    
-    return net_effect
+        # Dissipation parameters
+        self.dissipation_linear = 0.05    # [1/time]
+        self.dissipation_nonlinear = 0.001  # [1/(energy*time)]
+        self.dissipation_exponent = 1.5   # nonlinear scaling power
 
-def update(self, external_forcing: float = 0.0, dt: float = 0.1):
-    """
-    Update system state by one timestep
-    
-    Args:
-        external_forcing: External shock/input
-        dt: Timestep size
-    """
-    # Update retention and dissipation based on current energy
-    self.state.retention = self.compute_retention(self.state.energy)
-    self.state.dissipation = self.compute_dissipation(self.state.energy)
-    
-    # Apply feedbacks
-    feedback_effect = self.apply_feedbacks(external_forcing)
-    
-    # Update energy
-    energy_in = feedback_effect * self.state.retention
-    energy_out = self.state.dissipation
-    
-    dE = (energy_in - energy_out) * dt
-    self.state.energy += dE
-    
-    # Buffer capacity depletes with high energy states
-    if self.state.energy > self.warning_threshold:
-        depletion_rate = 0.01 * (self.state.energy / self.warning_threshold)
-        self.state.buffer_capacity *= (1 - depletion_rate * dt)
-        self.state.buffer_capacity = max(0.0, self.state.buffer_capacity)
+        # Buffer depletion rate
+        self.buffer_depletion_rate = 0.01  # [1/time]
 
-def classify_state(self) -> str:
-    """
-    Classify current system state
-    
-    Returns:
-        'stable', 'stressed', 'critical', or 'tipping'
-    """
-    if self.state.energy < self.warning_threshold:
-        return 'stable'
-    elif self.state.energy < self.critical_threshold:
-        return 'stressed'
-    elif self.state.energy < self.tipping_point:
-        return 'critical'
-    else:
-        return 'tipping'
+    def add_feedback(self, feedback: FeedbackLoop):
+        self.feedbacks.append(feedback)
 
-def diagnose(self) -> dict:
-    """
-    Generate diagnostic report
-    
-    Returns:
-        Dictionary with system health metrics
-    """
-    return {
-        'name': self.name,
-        'state': self.classify_state(),
-        'energy': self.state.energy,
-        'stability': self.state.stability_metric(),
-        'buffer_remaining': self.state.buffer_capacity,
-        'distance_to_tipping': self.state.distance_to_tipping_point(self.tipping_point),
-        'retention': self.state.retention,
-        'dissipation': self.state.dissipation,
-        'num_feedbacks': len(self.feedbacks)
-    }
+    def dissipation_rate(self, E: float) -> float:
+        """Total dissipation D(E) [energy/time].
 
-def simulate(self, steps: int, external_forcing_fn: Callable = None) -> List[dict]:
-    """
-    Run simulation for N steps
-    
-    Args:
-        steps: Number of timesteps
-        external_forcing_fn: Optional function(t) -> forcing
-        
-    Returns:
-        List of diagnostic snapshots over time
-    """
-    history = []
-    
-    for t in range(steps):
-        # Get external forcing if provided
-        forcing = external_forcing_fn(t) if external_forcing_fn else 0.0
-        
-        # Update system
-        self.update(external_forcing=forcing)
-        
-        # Record state
-        snapshot = self.diagnose()
-        snapshot['timestep'] = t
-        history.append(snapshot)
-    
-    return history
-```
+        D(E) = alpha * E + beta * E^p
 
-# Example: Climate System
+        where alpha is linear cooling, beta * E^p captures nonlinear
+        radiative losses (motivated by Stefan-Boltzmann T^4 scaling).
+        """
+        linear = self.dissipation_linear * E
+        nonlinear = self.dissipation_nonlinear * abs(E) ** self.dissipation_exponent
+        return linear + nonlinear
+
+    def total_feedback_rate(self, E: float) -> float:
+        """Sum of all feedback contributions [energy/time]."""
+        return sum(fb.rate(E) for fb in self.feedbacks)
+
+    def dE_dt(self, E: float, external_forcing: float = 0.0) -> float:
+        """Energy rate of change [energy/time].
+
+        dE/dt = F_ext + sum_k f_k(E) - D(E)
+        """
+        return external_forcing + self.total_feedback_rate(E) - self.dissipation_rate(E)
+
+    def update(self, external_forcing: float = 0.0, dt: float = 0.1):
+        """Advance system by one timestep using forward Euler."""
+        E = self.state.energy
+        self.state.energy += self.dE_dt(E, external_forcing) * dt
+
+        # Buffer depletion above warning threshold
+        if self.state.energy > self.warning_threshold:
+            rate = self.buffer_depletion_rate * (self.state.energy / self.warning_threshold)
+            self.state.buffer_capacity *= (1.0 - rate * dt)
+            self.state.buffer_capacity = max(0.0, self.state.buffer_capacity)
+
+    def stability_metric(self) -> float:
+        """Ratio of net amplification to dissipation.
+
+        > 1.0: energy accumulating (unstable)
+        ~ 1.0: balanced
+        < 1.0: energy dissipating (stable)
+
+        Returns inf if dissipation is zero.
+        """
+        E = self.state.energy
+        D = self.dissipation_rate(E)
+        if D == 0:
+            return float('inf')
+        net_feedback = self.total_feedback_rate(E)
+        return (net_feedback + D) / D  # = 1 + feedback/dissipation
+
+    def classify_state(self) -> str:
+        """Classify current system state by energy level."""
+        E = self.state.energy
+        if E < self.warning_threshold:
+            return 'stable'
+        elif E < self.critical_threshold:
+            return 'stressed'
+        elif E < self.tipping_point:
+            return 'critical'
+        else:
+            return 'tipping'
+
+    def diagnose(self) -> dict:
+        """Diagnostic snapshot of current system health."""
+        E = self.state.energy
+        return {
+            'name': self.name,
+            'state': self.classify_state(),
+            'energy': E,
+            'stability': self.stability_metric(),
+            'buffer_remaining': self.state.buffer_capacity,
+            'distance_to_tipping': (self.tipping_point - E) / self.tipping_point,
+            'feedback_rate': self.total_feedback_rate(E),
+            'dissipation_rate': self.dissipation_rate(E),
+            'num_feedbacks': len(self.feedbacks),
+        }
+
+    def simulate(self, steps: int, dt: float = 0.1,
+                 external_forcing_fn: Callable = None) -> List[dict]:
+        """Run simulation for N steps.
+
+        Args:
+            steps: Number of timesteps.
+            dt: Timestep size [time units].
+            external_forcing_fn: Optional function(t) -> forcing [energy/time].
+
+        Returns:
+            List of diagnostic snapshots, one per timestep.
+        """
+        history = []
+        for step in range(steps):
+            t = step * dt
+            forcing = external_forcing_fn(t) if external_forcing_fn else 0.0
+            self.update(external_forcing=forcing, dt=dt)
+            snapshot = self.diagnose()
+            snapshot['timestep'] = step
+            snapshot['time'] = t
+            history.append(snapshot)
+        return history
+
+
+# ── Example systems ──────────────────────────────────────────────────
 
 def create_climate_system() -> CEEDSystem:
-“”“Create a CEED model of climate system”””
-climate = CEEDSystem(“Climate”)
+    """Climate system with IPCC-motivated feedback strengths."""
+    climate = CEEDSystem("Climate")
 
-```
-# Positive feedbacks
-climate.add_feedback(FeedbackLoop(
-    name="Water vapor",
-    polarity="positive",
-    strength=0.4,
-    saturation_threshold=5.0  # Saturates at high temps
-))
+    # Positive feedbacks (amplify warming)
+    climate.add_feedback(FeedbackLoop(
+        name="Water vapor",
+        polarity="positive",
+        strength=0.04,          # [1/time]
+        saturation_energy=500.0,
+    ))
+    climate.add_feedback(FeedbackLoop(
+        name="Ice-albedo",
+        polarity="positive",
+        strength=0.03,
+        saturation_energy=300.0,  # saturates as ice depletes
+    ))
 
-climate.add_feedback(FeedbackLoop(
-    name="Ice-albedo",
-    polarity="positive",
-    strength=0.3,
-    saturation_threshold=3.0  # Limited ice left to melt
-))
+    # Negative feedbacks (stabilise)
+    climate.add_feedback(FeedbackLoop(
+        name="Radiative cooling",
+        polarity="negative",
+        strength=0.05,
+    ))
+    climate.add_feedback(FeedbackLoop(
+        name="Carbon sinks",
+        polarity="negative",
+        strength=0.03,
+        saturation_energy=400.0,  # sinks weaken with warming
+    ))
 
-# Negative feedbacks
-climate.add_feedback(FeedbackLoop(
-    name="Radiative cooling",
-    polarity="negative",
-    strength=0.5
-))
+    return climate
 
-climate.add_feedback(FeedbackLoop(
-    name="Carbon sinks",
-    polarity="negative",
-    strength=0.3,
-    saturation_threshold=4.0  # Sinks weaken with warming
-))
-
-return climate
-```
-
-# Example: Financial System
 
 def create_financial_system() -> CEEDSystem:
-“”“Create a CEED model of financial system”””
-finance = CEEDSystem(“Finance”)
+    """Financial stress system with leverage and liquidity feedbacks."""
+    finance = CEEDSystem("Finance")
 
-```
-# Positive feedbacks
-finance.add_feedback(FeedbackLoop(
-    name="Leverage spiral",
-    polarity="positive",
-    strength=0.5,
-    saturation_threshold=10.0
-))
+    finance.add_feedback(FeedbackLoop(
+        name="Leverage spiral",
+        polarity="positive",
+        strength=0.05,
+        saturation_energy=1000.0,
+    ))
+    finance.add_feedback(FeedbackLoop(
+        name="Panic selling",
+        polarity="positive",
+        strength=0.06,
+        saturation_energy=800.0,
+    ))
+    finance.add_feedback(FeedbackLoop(
+        name="Central bank intervention",
+        polarity="negative",
+        strength=0.04,
+        saturation_energy=1500.0,
+    ))
+    finance.add_feedback(FeedbackLoop(
+        name="Market liquidity",
+        polarity="negative",
+        strength=0.03,
+        saturation_energy=1200.0,
+    ))
 
-finance.add_feedback(FeedbackLoop(
-    name="Panic selling",
-    polarity="positive",
-    strength=0.6,
-    saturation_threshold=8.0
-))
+    return finance
 
-# Negative feedbacks
-finance.add_feedback(FeedbackLoop(
-    name="Central bank intervention",
-    polarity="negative",
-    strength=0.4,
-    saturation_threshold=15.0  # Limited intervention capacity
-))
 
-finance.add_feedback(FeedbackLoop(
-    name="Market liquidity",
-    polarity="negative",
-    strength=0.3,
-    saturation_threshold=12.0  # Dries up in crisis
-))
+if __name__ == "__main__":
+    print("CEED Universal Framework")
+    print("=" * 60)
 
-return finance
-```
+    climate = create_climate_system()
+    climate.state.energy = 50.0  # start with moderate energy
 
-if **name** == “**main**”:
-print(“CEED Universal Framework”)
-print(”=” * 60)
+    print(f"\nInitial state: {climate.classify_state()}")
+    print(f"Stability metric: {climate.stability_metric():.3f}")
 
-```
-# Create and test climate system
-climate = create_climate_system()
+    def forcing(t):
+        return 5.0  # constant external input [energy/time]
 
-print(f"\nInitial state: {climate.classify_state()}")
-print(f"Stability metric: {climate.state.stability_metric():.2f}")
+    history = climate.simulate(steps=100, dt=0.1, external_forcing_fn=forcing)
 
-# Simulate with constant forcing
-def forcing(t):
-    return 5.0  # Constant external input
-
-history = climate.simulate(steps=100, external_forcing_fn=forcing)
-
-# Print final state
-final = history[-1]
-print(f"\nFinal state after 100 steps:")
-print(f"  Classification: {final['state']}")
-print(f"  Energy: {final['energy']:.1f}")
-print(f"  Stability: {final['stability']:.2f}")
-print(f"  Buffer remaining: {final['buffer_remaining']:.2%}")
-print(f"  Distance to tipping point: {final['distance_to_tipping']:.2%}")
-```
+    final = history[-1]
+    print(f"\nAfter 100 steps (t={final['time']:.1f}):")
+    print(f"  Classification: {final['state']}")
+    print(f"  Energy: {final['energy']:.1f}")
+    print(f"  Stability metric: {final['stability']:.3f}")
+    print(f"  Buffer remaining: {final['buffer_remaining']:.2%}")
+    print(f"  Distance to tipping: {final['distance_to_tipping']:.2%}")

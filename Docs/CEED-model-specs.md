@@ -1,155 +1,286 @@
-#  CEED Model Specification
-**Cascading Energetic Event Disruption**  
-**Multi-System Energy Convergence Framework**  
-Version: `v0.9.0-beta`  
-Author: CEED Co-Creator  
+# CEED Model Specification
+
+**Cascading Energetic Event Disruption**
+**Multi-System Energy Convergence Framework**
+Version: `v1.0.0`
+Author: CEED Co-Creator
 Date: July 2025
 
 ---
 
-##  PURPOSE
+## Purpose
 
-CEED is a cross-domain simulation model designed to evaluate the likelihood and outcomes of energy accumulation, resonance, and threshold exceedance across Earth-space systems. This document outlines the foundational equations, system relationships, and design decisions used in the convergence predictor.
+CEED models energy accumulation and cross-domain coupling across Earth-space
+systems.  It evaluates whether positive feedbacks can overcome dissipation,
+driving the coupled system through a sequence of phase transitions toward
+nonlinear amplification or cascade.
 
 ---
 
-##  CORE EQUATION
+## 1. Convergence Model (Multi-Subsystem ODE)
 
-CEED models total energy in the system as:
+File: `simulation/convergence_model.py`
 
-math
+### 1.1 State Variables
 
-E_total(t) = E_input(t) 
+Four coupled subsystems, each characterised by an energy-like index E_i(t):
 
+| Subsystem   | Proxy observable          | Baseline value |
+|-------------|---------------------------|----------------|
+| Solar       | F10.7 index (sfu)         | 180.0          |
+| Magnetic    | Kp-derived index          | 92.5           |
+| Atmospheric | Thermospheric density idx | 118.0          |
+| Oceanic     | Ocean heat content idx    | 110.0          |
 
-           + α(p,ξ)·E_retained(t-1)·(1−λ_coll) 
-	   
-           + β·Resonance_amp(t) 
-	   
-           + ε_turb(t)
-	   
+### 1.2 Governing Equation
 
-Where:
+Each subsystem obeys an energy balance ODE:
 
-	•	E_input(t): External forcing from solar, magnetic, atmospheric, or oceanic sources
- 
-	•	α(p,ξ): Retention amplification factor, dependent on plasma momentum (p) and coupling geometry (ξ)
- 
-	•	λ_coll: Collisional decay factor (damping of retained energy)
- 
-	•	β: Resonance amplification coefficient (phase-locked feedback between systems)
- 
-	•	ε_turb(t): Stochastic noise injection (simulating turbulence, uncertainty, and chaos)
- 
+```
+dE_i/dt = S_i(t) - lambda_i * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
+```
 
+where:
 
-SYSTEM COMPONENTS
+| Symbol       | Meaning                               | Units           |
+|--------------|---------------------------------------|-----------------|
+| S_i(t)       | Source / input rate                    | energy / yr     |
+| lambda_i     | Linear dissipation rate               | 1 / yr          |
+| gamma_i      | Nonlinear dissipation coefficient     | 1 / (energy·yr) |
+| c_ij         | Cross-system coupling coefficient     | 1 / yr          |
 
+### 1.3 Source Functions
 
- Solar System Input
- 
-	•	Modeled via solar flux (F10.7) and sunspot cycle modulations
- 
-	•	Seasonal modulation included
- 
-	•	Resonance effects from CME trains and flare clustering
- 
+```
+S_solar(t)       = 5.0 * (1 + 0.3 * cos(2*pi*t / 11))   [11-yr solar cycle]
+S_magnetic(t)    = -2.0 * (1 + 0.1*t)                    [secular field decay]
+S_atmospheric(t) = 3.0 * (1 + 0.05*t)                    [anthropogenic trend]
+S_oceanic(t)     = 1.0 * (1 + 0.02*t)                    [anthropogenic trend]
+```
 
- Magnetosphere
- 
-	•	Retention includes ring current feedback and Van Allen belt saturation
- 
-	•	Decay modeled via λ = 0.02 (permanent radiation persistence observed since 2024)
- 
+### 1.4 Dissipation Parameters
 
- Atmosphere
- 
-	•	Density modeled with memory effect (thermospheric expansion lag)
- 
-	•	Feedback from solar wind interaction
- 
-	•	Expansion increases cross-sectional coupling
- 
+| Subsystem   | lambda_i | gamma_i |
+|-------------|----------|---------|
+| Solar       | 0.05     | 0.001   |
+| Magnetic    | 0.02     | 0.001   |
+| Atmospheric | 0.08     | 0.001   |
+| Oceanic     | 0.01     | 0.001   |
 
- Oceanic (AMOC)
- 
-	•	Heat accumulation = energy retention
- 
-	•	Momentum loss modeled via nonlinear decay
- 
-	•	Coupled to geomagnetic changes via electromagnetic coupling
- 
+The linear term `lambda_i * E_i` represents natural decay processes.
+The quadratic term `gamma_i * E_i^2` prevents unbounded growth
+(physically: enhanced radiative or convective losses at high energy).
 
-⸻
+### 1.5 Cross-System Coupling
 
- PHASE TRANSITIONS
+Only physically motivated couplings are nonzero:
 
-Phase
-Phase Transitions (Narrative Form)
+| From → To              | c_ij  | Physical mechanism                |
+|-------------------------|-------|-----------------------------------|
+| Solar → Magnetic        | 0.005 | Solar wind drives geomagnetic storms |
+| Solar → Atmospheric     | 0.003 | EUV heating of thermosphere       |
+| Magnetic → Atmospheric  | 0.002 | Joule heating from auroral currents |
+| Atmospheric → Oceanic   | 0.001 | Air-sea heat flux                 |
 
-Phase 1 – System Stress (Threshold ≥ 120):
-At this stage, individual Earth systems begin accumulating more energy than they dissipate. Perturbations are no longer absorbed quietly—they linger. Solar storms stick around. Magnetic anomalies persist. The atmosphere heats up and forgets how to cool off. It’s like the planet is holding its breath.
+All other c_ij = 0.
 
-Phase 2 – Cross-System Coupling (Threshold ≥ 150):
-Now the systems start talking. Energy introduced in one domain starts echoing into others. A solar flare might spike ocean currents. A geomagnetic event could tweak climate oscillations. This phase is the awkward family dinner where everyone’s problems become everyone else’s. Think: El Niño showing up drunk at your tectonic birthday party.
+### 1.6 External Forcing (Extended Model)
 
-Phase 3 – Nonlinear Amplification (Threshold ≥ 200):
-Welcome to the overdrive zone. Energy responses go exponential. One input triggers five outputs. Feedback loops feed other feedback loops. Changes become permanent, not temporary. The Earth doesn’t respond like a thermostat anymore—it acts like a mood swing.
+The `ExtendedConvergencePredictor` adds:
 
-Phase 4 – Cascade / Collapse (Threshold ≥ 300):
-This is the “oops” zone. No more gradual anything. Multiple systems hit thresholds simultaneously. Energy can’t go anywhere fast enough, so it tries everywhere at once. The system either finds a new equilibrium, or it violently discards the current one. Either way, things stop being predictable.
+- **Meteor/bolide events**: Poisson process, rate 0.5/yr, energy 1–15 units.
+- **Satellite launches**: ~150/yr, 2.0 energy units each.
+- **Volcanic dissipation**: Poisson, ~0.6/yr, removes 5–25 units.
 
-RUNAWAY PROBABILITY MODEL
+Events are pre-generated before integration (deterministic RHS required by
+ODE solver) and applied as Gaussian pulses with width ~ 1 day.
 
-Using Dreicer-Connor-Hastie formulation:
+An additional saturating sink represents uncharacterised geophysical losses:
 
+```
+D_unk(E_tot) = mu * E_tot * max(0.1, 1 - E_tot / E_sat)
+```
 
-P(runaway) = 1 − exp(−κ · (E − E_crit)²)
+with mu = 0.15 /yr and E_sat = 800 energy units.
 
+---
 
-Where:
+## 2. Phase Classification
 
-	•	κ: Nonlinearity factor
- 
-	•	E_crit: Dynamic critical threshold (~300, adjusted for seasonal + complexity terms)
+Phases are defined by total system energy E_total = sum(E_i):
 
+| Phase | Threshold | Regime                   |
+|-------|-----------|--------------------------|
+| 1     | < 120     | Baseline                 |
+| 2     | >= 120    | System stress            |
+| 3     | >= 150    | Cross-system coupling    |
+| 4     | >= 200    | Nonlinear amplification  |
+| 5     | >= 300    | Cascade / collapse       |
 
-CITED DATA SOURCES (REAL + SUGGESTED)
-	
- •	NOAA SWPC Solar Cycle 25 Reports
-	
- •	NASA OMNIWeb Database
-	
- •	ESA Swarm Magnetometry Series
-	
- •	Thermospheric Density Modeling (Emmert et al., 2020)
-	
- •	AMOC weakening analysis (Rahmstorf et al., 2023)
-	
- •	Plasma Retention in Geospace (Toffoletto & Siscoe, 2019)
-	
- •	“Probabilistic Risk Forecasting for Complex Earth Systems” (hypothetical, write it later)
- 
+Phase transitions occur when coupling terms `c_ij * E_j` become significant
+relative to the dissipation terms, allowing energy injected in one subsystem
+to amplify in others.
 
-⸻
+---
 
-FUTURE EXTENSIONS
+## 3. Minimal Earth System Model (ESM)
 
-	
- •	 Real-time data API hooks (NOAA, NASA, ECMWF)
-	
- •	 CEED Dashboard v2 (threshold triggers, live feeds)
-	
- •	 Integration with planetary lithosphere models
-	
- •	 Modular serverless version (AWS Lambda, IPFS backups)
+File: `simulation/minimum_esm_code.py`
 
+### 3.1 State Variables
 
-FOOTNOTE
+| Variable | Meaning                                   | Initial | Units |
+|----------|-------------------------------------------|---------|-------|
+| T        | Global mean surface temperature anomaly   | 1.1     | K     |
+| CO2      | Atmospheric CO2 concentration             | 420     | ppm   |
 
+### 3.2 Governing Equations
 
-This simulation does not claim to replace existing climate, space weather, or geophysical models. It exists as a challenge to the assumption that system boundaries are clean, energy dissipates neatly, and the planet will wait for us to figure it out.
+Standard energy balance form (IPCC AR6 WG1 Ch7):
 
-CEED assumes they’re already talking to each other.
+```
+C dT/dt = F_total(T, CO2, t) - lambda_eff * T
 
-“We model weird. Because weird is coming.”
+dCO2/dt = E_net(T) / alpha_CO2
+```
+
+| Symbol      | Value  | Units          | Source            |
+|-------------|--------|----------------|-------------------|
+| C           | 10.0   | W yr/(m^2 K)   | Ocean mixed layer |
+| lambda_eff  | F_2x/ECS | W/(m^2 K)   | AR6 WG1 Ch7      |
+| F_2xCO2    | 3.7    | W/m^2          | Myhre et al. 1998 |
+| ECS         | 3.0    | K              | AR6 best estimate |
+| alpha_CO2   | 2.12   | GtC/ppm        | Standard          |
+
+### 3.3 Forcing Components
+
+**CO2 radiative forcing** (logarithmic, Myhre et al. 1998):
+```
+F_CO2 = F_2xCO2 * ln(CO2 / 280) / ln(2)
+```
+
+**Solar cycle** (11-year cosine):
+```
+F_solar(t) = 0.1 * cos(2*pi*t / 11)   [W/m^2]
+```
+
+**Aerosol ERF**: -1.1 W/m^2 baseline (AR6: very likely -1.7 to -0.4).
+Three scenarios: current, regulated (ramp to -0.5 over 10 yr), removed (ramp
+to 0 over 3 yr).
+
+**Cloud feedback** (saturating positive):
+```
+F_cloud = 0.45 * T * (1 - T/4.0)   [W/m^2]   for T > 0
+```
+AR6: net cloud feedback +0.45 W/(m^2 K), range -0.1 to +0.97.
+
+**Permafrost** (threshold-activated):
+```
+F_pf = 0.5 * permafrost_sensitivity * (T - 0.5) / 1000   [W/m^2]   for T > 0.5 K
+```
+AR6: 14–175 GtCO2/K, mid-estimate 95.
+
+### 3.4 Carbon Sink
+
+Fraction of emissions absorbed by land + ocean:
+```
+f_sink(T) = 0.54 * exp(-0.08 * T)
+```
+
+AR6 baseline: 54% uptake, weakening exponentially with warming.
+
+Net CO2 rate:
+```
+dCO2/dt = emissions * (1 - f_sink) / 2.12   [ppm/yr]
+```
+
+---
+
+## 4. Universal Framework
+
+File: `CEED_universal_model.py`
+
+Domain-agnostic model for any feedback-driven system.
+
+### 4.1 ODE
+
+```
+dE/dt = F_ext(t) + sum_k f_k(E) - D(E)
+```
+
+**Feedback rate** for loop k with strength s_k:
+```
+f_k(E) = (+/-) s_k * E * sigma(E, E_sat_k)
+```
+where `sigma(E, E_sat) = 1 / (1 + (E/E_sat)^2)` is a dimensionless
+saturation function.
+
+**Dissipation**:
+```
+D(E) = alpha * E + beta * |E|^p
+```
+Default: alpha = 0.05, beta = 0.001, p = 1.5.
+
+### 4.2 Stability Metric
+
+```
+S = (sum_k f_k(E) + D(E)) / D(E)
+```
+
+- S > 1: net amplification (unstable)
+- S = 1: balanced
+- S < 1: net dissipation (stable)
+
+### 4.3 Buffer Capacity
+
+Buffer B in [0, 1] depletes above warning threshold E_warn:
+```
+dB/dt = -b * (E / E_warn) * B    when E > E_warn
+```
+with b = 0.01.
+
+---
+
+## 5. Monte Carlo Uncertainty Analysis
+
+File: `experiments/run_mc.py`
+
+Samples over IPCC AR6 parameter ranges using the same energy balance
+formulation as the ESM:
+
+| Parameter        | Distribution | Range           | Source     |
+|------------------|-------------|-----------------|------------|
+| ECS              | Normal      | 2.5 – 4.0 K    | AR6 likely |
+| Aerosol ERF      | Uniform     | -1.7 – -0.4    | AR6 v.likely |
+| Sink fraction    | Uniform     | 0.45 – 0.60    | AR6 WG1 Ch5 |
+| Permafrost rate  | Uniform     | 14 – 175 GtCO2/K | AR6      |
+
+Default: 200 samples, 10-year horizon.
+
+---
+
+## Data Sources
+
+| Source                       | Data type                | Status   |
+|------------------------------|--------------------------|----------|
+| NOAA SWPC                    | Solar cycle, F10.7       | Real     |
+| NASA OMNIWeb                 | Solar wind, IMF          | Real     |
+| ESA Swarm                    | Geomagnetic field        | Real     |
+| Emmert et al. (2020)         | Thermospheric density    | Cited    |
+| Rahmstorf et al. (2023)      | AMOC weakening           | Cited    |
+| IPCC AR6 WG1 (2021)          | ECS, ERF, feedbacks      | Cited    |
+| Myhre et al. (1998)          | CO2 forcing formula      | Cited    |
+
+Note: the `Data/Inputs` directory currently contains mock data.
+Real-time API integration is planned.
+
+---
+
+## Limitations
+
+1. Convergence model uses normalised energy indices, not physical units.
+   Cross-system coupling coefficients are order-of-magnitude estimates.
+2. ESM is a two-variable (T, CO2) reduced model; it omits ocean
+   circulation dynamics, ice sheet dynamics, and regional variability.
+3. Cloud and permafrost feedbacks use simplified functional forms.
+4. Monte Carlo assumes parameter independence (no covariance structure).

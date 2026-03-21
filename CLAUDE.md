@@ -1,22 +1,26 @@
 # CLAUDE.md
 
-Guidelines for AI assistants working on the CEED (Cascading Energetic Event Disruption) codebase.
+Guidelines for AI assistants working on the CEED codebase.
 
 ## Project Overview
 
-CEED is a Python simulation framework for modeling cross-domain energy convergence and feedback saturation across Earth-space systems. It explores worst-case scenarios where energy accumulation and positive feedback loops lead to nonlinear state transitions in climate, geomagnetic, oceanic, and atmospheric systems.
+CEED (Cascading Energetic Event Disruption) is a Python simulation framework
+for modelling cross-domain energy convergence across Earth-space systems.
+It uses coupled ODEs to track energy accumulation in solar, magnetic,
+atmospheric, and oceanic subsystems and evaluates whether positive feedbacks
+can drive the system through phase transitions toward nonlinear amplification.
 
-All parameters are anchored to IPCC AR6 Working Group I and peer-reviewed literature.
+All parameters are anchored to IPCC AR6 and peer-reviewed literature.
 
 ## Repository Structure
 
 ```
 CEED/
-├── CEED_universal_model.py          # Abstract feedback framework (FeedbackLoop, SystemState, CEEDSystem)
+├── CEED_universal_model.py          # Domain-agnostic feedback framework
 ├── dashboard_starter.py             # Streamlit UI prototype
 ├── simulation/
-│   ├── convergence_model.py         # Main extended model (ExtendedConvergencePredictor)
-│   └── minimum_esm_code.py          # Minimal Earth System Model (IPCC-calibrated)
+│   ├── convergence_model.py         # Multi-subsystem coupled ODE model
+│   └── minimum_esm_code.py          # 2-variable Earth System Model (T, CO2)
 ├── Tests/
 │   └── test-convergence-model.py    # Pytest test suite
 ├── experiments/
@@ -24,8 +28,7 @@ CEED/
 ├── Data/
 │   └── Inputs                       # Mock data input layer
 ├── Docs/
-│   └── CEED-model-specs.md          # Model specification document
-├── UI/                              # Placeholder for UI requirements
+│   └── CEED-model-specs.md          # Full model specification
 ├── requirements.txt                 # Python dependencies
 ├── references.md                    # Scientific literature citations
 └── red-team-report.md               # Risk assessment report
@@ -39,73 +42,104 @@ CEED/
 | Install deps | `pip install -r requirements.txt` |
 | Run tests | `pytest Tests/test-convergence-model.py` |
 | Run simulation | `python simulation/convergence_model.py` |
+| Run ESM | `python simulation/minimum_esm_code.py --plot` |
+| Run Monte Carlo | `python experiments/run_mc.py --n 200 --horizon 10` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
-| Run Monte Carlo | `python experiments/run_mc.py` |
 | License | MIT |
 
 ## Dependencies
 
 Core: `numpy>=1.21.0`, `scipy>=1.7.0`, `matplotlib>=3.4.0`, `pyyaml>=5.4.0`
 
-Optional: `streamlit` (dashboard UI, not in requirements.txt)
+Optional: `streamlit` (dashboard), `pytest` (testing)
 
-## Architecture
+## Mathematical Formulations
 
-### Core Classes and Patterns
+### Convergence Model (`simulation/convergence_model.py`)
 
-- **`FeedbackLoop`** (dataclass): Defines a feedback loop with `name`, `polarity`, `strength`, `saturation_threshold`.
-- **`SystemState`** (dataclass): Tracks `energy`, `retention`, `dissipation`, `buffer_capacity`.
-- **`CEEDSystem`**: Core engine that composes feedback loops and computes system evolution. Key metric: `stability_metric() = retention / dissipation` (>1.0 = unstable).
-- **`ExtendedConvergencePredictor`**: Extended model tracking 4 subsystems (solar, magnetic, atmospheric, oceanic) with external event handling and phase classification.
-- **Earth System Model** (`minimum_esm_code.py`): IPCC AR6-calibrated 2-layer energy balance model using `scipy.integrate.odeint`.
+Four coupled subsystems (solar, magnetic, atmospheric, oceanic), each with
+energy index E_i(t). The ODE is:
 
-### Phase Classification
+```
+dE_i/dt = S_i(t) - lambda_i * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
+```
 
-Energy thresholds define system phases (hardcoded):
-- Phase 1: >= 120 (System Stress)
-- Phase 2: >= 150 (Cross-System Coupling)
-- Phase 3: >= 200 (Nonlinear Amplification)
-- Phase 4: >= 300 (Cascade/Collapse)
+- `S_i(t)`: source rate (solar cycle, secular trends)
+- `lambda_i * E_i`: linear dissipation
+- `gamma_i * E_i^2`: nonlinear dissipation (prevents unbounded growth)
+- `c_ij * E_j`: cross-system coupling (only physically motivated pairs)
 
-### Energy Variables
+The extended model adds pre-generated external events (Gaussian pulses) and
+a saturating unknown-sink term.
 
-- Energy variables follow the `E_*` naming pattern (e.g., `E_current`, `E_total`)
-- Dissipation saturates at ~800 energy units
-- Unknown sink baseline: 15% per timestep at low energy
-- Retention collapse at high energy prevents unrealistic runaway
+### Earth System Model (`simulation/minimum_esm_code.py`)
+
+Standard energy balance form (IPCC AR6 WG1 Ch7):
+
+```
+C dT/dt = F_total(T, CO2, t) - lambda_eff * T
+dCO2/dt = E_net(T) / alpha_CO2
+```
+
+- C = 10.0 W yr/(m^2 K) — effective heat capacity
+- lambda_eff = F_2xCO2 / ECS — climate feedback parameter
+- F_2xCO2 = 3.7 W/m^2 — CO2 doubling forcing (Myhre et al. 1998)
+
+### Universal Framework (`CEED_universal_model.py`)
+
+Domain-agnostic model:
+
+```
+dE/dt = F_ext(t) + sum_k f_k(E) - D(E)
+```
+
+Feedbacks use rational saturation: `f_k(E) = s_k * E / (1 + (E/E_sat)^2)`
+
+Dissipation: `D(E) = alpha * E + beta * |E|^p`
 
 ## Code Style
 
-No formatter or linter is configured. Follow these observed conventions:
+No formatter or linter is configured. Follow these conventions:
 
 - **Classes**: PascalCase (`ConvergencePredictor`, `SystemState`)
 - **Functions/methods**: snake_case (`predict_convergence`, `classify_phases`)
-- **Constants**: UPPER_CASE
-- **Type hints**: Use `typing` module (`List`, `Dict`, `Tuple`, `Callable`)
-- **Data structures**: Prefer `@dataclass` for structured data
-- **Docstrings**: Triple-quoted strings on classes and public methods
-- **Imports**: Standard library first, then third-party, grouped at file top
-- Follow PEP 8 conventions
+- **Constants**: UPPER_CASE (`SYSTEMS`, `N_SYSTEMS`)
+- **Type hints**: Use `typing` module and dataclass annotations
+- **Data structures**: `@dataclass` for structured data
+- **Imports**: stdlib, then third-party, grouped at file top
+- Follow PEP 8
 
 ## Testing
 
-Tests use **pytest** and live in `Tests/test-convergence-model.py`. Current tests:
+Tests use **pytest** and live in `Tests/test-convergence-model.py`.
 
-- `test_model_initialization` - Validates model initialization
-- `test_energy_prediction_shape` - Checks prediction output dimensions
-- `test_phase_classification` - Validates phase classification (1-4)
-- `test_total_energy_increase` - Validates energy accumulation behavior
+Run: `pytest Tests/test-convergence-model.py -v`
 
-Run with: `pytest Tests/test-convergence-model.py`
+Key test properties verified:
+- Model initialization and output shape
+- Phase classification range (1-4)
+- ODE stays finite over long horizons (no blowup)
+- Dissipation bounds growth (no source -> energy decays)
+- ODE RHS is deterministic (no stochastic calls inside derivatives)
+- Extended model without events matches baseline exactly
 
-There is no CI/CD pipeline configured. Always run tests locally before committing.
+## Guidelines for AI Assistants
 
-## Key Guidelines for AI Assistants
-
-1. **Scientific accuracy**: All model parameters must be traceable to peer-reviewed literature or IPCC AR6. Do not invent physical constants.
-2. **Preserve phase thresholds**: The 4-phase classification (120/150/200/300) is a core design choice. Do not change without explicit request.
-3. **Energy conservation**: Models must respect energy balance. Dissipation saturation and retention collapse are intentional safeguards.
-4. **Run tests**: Always run `pytest Tests/test-convergence-model.py` after modifying simulation code.
-5. **No over-engineering**: This is a research/simulation project. Keep abstractions minimal and code readable to scientists.
-6. **Data files**: Real data sources include NOAA SWPC, NASA OMNIWeb, ESA Swarm. The `Data/Inputs` directory currently uses mock data.
-7. **Units matter**: The ESM uses real physics units (W/m², degrees C, GtCO2). Maintain unit consistency in all calculations.
+1. **ODE correctness**: The RHS of every ODE must be deterministic — no
+   `random()` calls inside derivative functions. Pre-generate stochastic
+   events before integration.
+2. **Dimensional consistency**: Every term in `dE/dt` must have units of
+   [energy/time]. Document units in docstrings and parameter tables.
+3. **No runaway by construction**: Every model must include nonlinear
+   dissipation (quadratic or higher) that dominates at high energy,
+   ensuring solutions stay bounded.
+4. **Scientific accuracy**: Parameters must be traceable to IPCC AR6 or
+   cited literature. Do not invent physical constants.
+5. **Phase thresholds**: The 4-phase classification (120/150/200/300) is a
+   core design choice. Do not change without explicit request.
+6. **Standard forms**: Use `C dT/dt = F - lambda*T` for energy balance, not
+   ad-hoc retention/dissipation multipliers.
+7. **Run tests**: Always run `pytest Tests/test-convergence-model.py` after
+   modifying simulation code.
+8. **No over-engineering**: This is a research/simulation project. Keep
+   abstractions minimal and code readable to scientists.
