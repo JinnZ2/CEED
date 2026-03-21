@@ -1,48 +1,42 @@
 """
 CEED Convergence Model
-Multi-system energy balance with cross-domain coupling.
+Multi-system energy balance with cross-domain coupling and anthropogenic forcing.
 
 Each subsystem tracks a stored energy index E_i(t) governed by:
 
-    dE_i/dt = S_i(t) + alpha_i * E_i - lambda_i * E_i - gamma_i * E_i^2
-              + sum_j(c_ij * E_j) + F_ext_i(t)
+    dE_i/dt = S_i(t) + A_i(t)
+              + (alpha_i(E,t) - lambda_i) * E_i
+              - gamma_i * E_i^2
+              + sum_j [eta_ij(E) * c_ij(E) * E_j]   (received, converted)
+              - sum_j [c_ji(E) * E_i]                (sent, full amount)
 
-which can be written:
+where all parameters can be state-dependent:
 
-    dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2
-              + sum_j(c_ij * E_j) + F_ext_i(t)
-
-where:
-    S_i(t)       : external source/input rate [energy/yr]
-    alpha_i      : retention rate — rate at which the system reinforces
-                   its own energy state [1/yr].  Physical mechanisms:
-                   greenhouse trapping (atm), magnetic confinement (mag),
-                   ocean thermal inertia (oceanic), coronal storage (solar)
+    S_i(t)       : natural source/input rate [energy/yr]
+    A_i(t)       : anthropogenic forcing — geological energy release [energy/yr]
+    alpha_i(E,t) : effective retention rate [1/yr], increases with atmospheric
+                   energy (greenhouse amplification) and anthropogenic load
     lambda_i     : radiative/dissipative loss rate [1/yr]
-    gamma_i      : nonlinear dissipation [1/(energy*yr)] — dominates at
-                   high E, ensuring bounded solutions (2nd law: entropy
-                   production increases with energy, enhanced radiation)
-    c_ij         : transfer rate from system j to system i [1/yr]
-    eta_ij       : conversion efficiency from j to i [dimensionless, 0-1]
-    F_ext_i(t)   : external forcing (meteors, launches, volcanic) [energy/yr]
+    gamma_i      : nonlinear dissipation [1/(energy*yr)] — 2nd law bound
+    c_ij(E)      : transfer rate from j to i [1/yr], strengthens with
+                   energy gradients (Clausius-Clapeyron, convective vigor)
+    eta_ij(E)    : conversion efficiency [0-1], shifts with system state
 
-Cross-system coupling is conservative.  When system j transfers energy
-to system i at rate c_ij * E_j:
+Anthropogenic forcing:
 
-    system i gains:  eta_ij * c_ij * E_j   (converted fraction)
-    system j loses:  c_ij * E_j            (total transferred)
-    waste heat:      (1 - eta_ij) * c_ij * E_j   (2nd law entropy cost)
+    Fossil fuels represent ~300 Myr of stored photosynthetic energy released
+    over ~200 yr — a 1.5-million-fold temporal compression.  This doesn't
+    just add a source term; it modifies the system's own parameters:
 
-Energy conservation (1st law): energy entering the system either stays
-(retention) or leaves (dissipation + transfer to other systems).
-The net rate (alpha - lambda) controls whether the system accumulates
-or loses energy.  CEED's thesis: when alpha_i >= lambda_i across multiple
-coupled subsystems, energy accumulates until nonlinear dissipation
-(gamma * E^2) restores balance — or the system transitions to a new state.
+    1. More CO2 → higher atmospheric retention (alpha_atm increases)
+    2. Warmer atmosphere → stronger air-sea coupling (Clausius-Clapeyron)
+    3. Warmer ocean → weaker carbon sinks → more CO2 → higher retention
+    4. Rate of release is itself accelerating (~2%/yr historical growth)
 
-2nd law constraint: gamma_i > 0 guarantees that dissipation always wins
-at sufficiently high E.  Conversion efficiencies eta_ij < 1 guarantee
-that every energy transfer produces entropy.
+    The anthropogenic load A(t) is split across atmospheric and oceanic
+    subsystems (the two primary sinks for fossil energy).
+
+Cross-system coupling is conservative (see previous docstring for details).
 """
 
 import numpy as np
@@ -72,10 +66,89 @@ class ExternalEvent:
 
 
 @dataclass
+class AnthropogenicForcing:
+    """Geological energy release from fossil fuel combustion.
+
+    Models the temporal compression of ~300 Myr of stored solar energy
+    into a ~200 yr release window, with accelerating extraction rate.
+
+    The forcing modifies not just source terms but system parameters:
+    retention rates, coupling strengths, and conversion efficiencies
+    all shift as the anthropogenic energy load grows.
+
+    Attributes:
+        A_0: Current annual energy release rate [energy/yr].
+            Calibrated to ~580 EJ/yr primary energy (2024), normalised
+            to model units.
+        growth_rate: Exponential growth rate of extraction [1/yr].
+            Historical average ~2%/yr since 1950.
+        peak_year: Year (from t=0) at which extraction peaks under
+            resource constraints.  None = no peak (pure exponential).
+        atm_fraction: Fraction of released energy deposited into
+            atmospheric subsystem (rest goes to oceanic).
+        alpha_sensitivity: How strongly atmospheric retention responds
+            to anthropogenic load [dimensionless].
+            delta_alpha = alpha_sensitivity * ln(1 + A(t)/A_0)
+        coupling_sensitivity: How strongly coupling rates respond to
+            energy gradients [dimensionless].
+        efficiency_shift: How conversion efficiencies shift with
+            total system energy [1/energy].
+    """
+    A_0: float = 8.0                # baseline release [energy/yr]
+    growth_rate: float = 0.02       # 2%/yr exponential growth
+    peak_year: Optional[float] = 50.0  # resource peak at t=50yr
+    atm_fraction: float = 0.55      # 55% to atmosphere, 45% to ocean
+    alpha_sensitivity: float = 0.02  # retention response to load
+    coupling_sensitivity: float = 0.15  # coupling response to gradients
+    efficiency_shift: float = 0.0003  # efficiency response to energy
+
+    def release_rate(self, t: float) -> float:
+        """Total anthropogenic energy release rate A(t) [energy/yr].
+
+        Exponential growth up to peak_year, then logistic plateau:
+            A(t) = A_0 * exp(r*t)                          if no peak
+            A(t) = A_max / (1 + ((A_max/A_0) - 1)*exp(-r*t))  with peak
+
+        The logistic form ensures smooth transition from exponential
+        growth to resource-constrained plateau.
+        """
+        if self.peak_year is None:
+            return self.A_0 * np.exp(self.growth_rate * t)
+
+        # Logistic growth toward resource-constrained peak
+        A_max = self.A_0 * np.exp(self.growth_rate * self.peak_year)
+        ratio = A_max / self.A_0
+        return A_max / (1.0 + (ratio - 1.0) * np.exp(-self.growth_rate * t))
+
+    def cumulative_release(self, t: float) -> float:
+        """Approximate cumulative energy released from t=0 to t [energy].
+
+        For context: 300 Myr of storage released in ~200 yr means the
+        cumulative release is a tiny fraction of geological storage but
+        a massive perturbation to the current system.
+        """
+        if self.peak_year is None:
+            return (self.A_0 / self.growth_rate) * (
+                np.exp(self.growth_rate * t) - 1.0)
+
+        # Approximate integral of logistic (exact for the form used)
+        A_max = self.A_0 * np.exp(self.growth_rate * self.peak_year)
+        ratio = A_max / self.A_0
+        return (A_max / self.growth_rate) * np.log(
+            (1.0 + (ratio - 1.0)) /
+            (1.0 + (ratio - 1.0) * np.exp(-self.growth_rate * t))
+        )
+
+
+@dataclass
 class SystemParameters:
     """Parameters for the coupled energy-balance ODE.
 
     All rates are per year.  Energy units are normalised (see baseline values).
+
+    When anthropogenic forcing is enabled, retention rates, coupling
+    strengths, and conversion efficiencies become state-dependent
+    (functions of E and t), computed at each ODE evaluation.
     """
 
     # Initial energies [normalised energy units]
@@ -86,23 +159,17 @@ class SystemParameters:
         'oceanic': 110.0,     # proxy: ocean heat content index
     })
 
-    # Retention rates [1/yr]
-    # Rate at which each subsystem reinforces its own energy state.
-    # Physical basis:
-    #   solar       — coronal magnetic confinement of plasma
-    #   magnetic    — ring current self-sustaining via gradient drift
-    #   atmospheric — greenhouse trapping of outgoing longwave radiation
-    #   oceanic     — thermal inertia of deep ocean heat storage
+    # Baseline retention rates [1/yr]
+    # These are the pre-industrial / unperturbed values.
+    # With anthropogenic forcing, effective alpha increases.
     alpha_retention: dict = field(default_factory=lambda: {
-        'solar': 0.06,
-        'magnetic': 0.025,
-        'atmospheric': 0.09,
-        'oceanic': 0.015,
+        'solar': 0.06,        # coronal magnetic confinement
+        'magnetic': 0.025,    # ring current gradient drift
+        'atmospheric': 0.09,  # greenhouse trapping (pre-industrial)
+        'oceanic': 0.015,     # thermal inertia
     })
 
     # Linear dissipation rates [1/yr]
-    # Radiative losses, particle precipitation, heat flux to space.
-    # Net growth when alpha > lambda; net decay when alpha < lambda.
     lambda_dissipation: dict = field(default_factory=lambda: {
         'solar': 0.05,
         'magnetic': 0.02,
@@ -111,8 +178,6 @@ class SystemParameters:
     })
 
     # Nonlinear (quadratic) dissipation [1/(energy*yr)]
-    # Enforces 2nd-law bound: at high E, entropy production and
-    # radiative losses scale superlinearly, preventing runaway.
     gamma_nonlinear: dict = field(default_factory=lambda: {
         'solar': 0.0002,
         'magnetic': 0.0002,
@@ -120,26 +185,9 @@ class SystemParameters:
         'oceanic': 0.0002,
     })
 
-    # Cross-system coupling: transfer rates c_ij [1/yr] and
-    # conversion efficiencies eta_ij [dimensionless].
-    #
-    # Key (i, j) means "from j to i": system j loses c*E_j,
-    # system i gains eta*c*E_j, difference is waste heat (2nd law).
-    #
-    # PRIMARY COUPLINGS (direct physical mechanisms):
-    #   solar → magnetic    : solar wind reconnection (~15% efficient)
-    #   solar → atmospheric : EUV/UV absorption by thermosphere (~30%)
-    #   solar → oceanic     : shortwave penetration into ocean (~40%)
-    #   magnetic → atmospheric : Joule heating + particle precipitation (~25%)
-    #   atmospheric → oceanic  : air-sea sensible + latent heat flux (~35%)
-    #
-    # SECONDARY COUPLINGS (feedback pathways):
-    #   oceanic → atmospheric  : evaporation, sensible heat, ENSO (~30%)
-    #   atmospheric → magnetic : ionospheric dynamo currents (~10%)
-    #   magnetic → solar       : magnetospheric return flow (~10%)
-    #   oceanic → magnetic     : EM induction in saltwater (~5%, Swarm-measured)
-    #
-    # Format: (to, from): (transfer_rate, conversion_efficiency)
+    # Cross-system coupling: baseline values (transfer_rate, efficiency).
+    # With anthropogenic forcing, both can be state-dependent.
+    # Key (i, j) means "from j to i".
     coupling: dict = field(default_factory=lambda: {
         # Primary couplings
         ('magnetic', 'solar'):       (0.005, 0.15),
@@ -162,22 +210,31 @@ class SystemParameters:
         'phase_4': 300,  # cascade / collapse
     })
 
+    # Anthropogenic forcing (None = disabled, static parameters)
+    anthropogenic: Optional[AnthropogenicForcing] = None
+
 
 class ConvergencePredictor:
-    """Baseline convergence model (no external events)."""
+    """Convergence model with optional anthropogenic forcing.
+
+    When params.anthropogenic is None, all parameters are static
+    (backward-compatible with previous model versions).
+
+    When enabled, anthropogenic forcing:
+    1. Adds a source term A_i(t) to atmospheric and oceanic subsystems
+    2. Increases atmospheric retention (more GHGs → more trapping)
+    3. Strengthens coupling between energetic subsystems
+    4. Shifts conversion efficiencies with system state
+    """
 
     def __init__(self, params: Optional[SystemParameters] = None):
         self.params = params or SystemParameters()
         self._sys_idx = {name: i for i, name in enumerate(SYSTEMS)}
 
-    def source_rate(self, system: str, t: float) -> float:
-        """External source/input rate S_i(t) [energy/yr].
+    # ── Source terms ──────────────────────────────────────────────
 
-        Solar: 11-year sunspot cycle modulation (F10.7 proxy).
-        Magnetic: secular geomagnetic field weakening trend.
-        Atmospheric: anthropogenic greenhouse gas trend.
-        Oceanic: anthropogenic ocean heat uptake trend.
-        """
+    def source_rate(self, system: str, t: float) -> float:
+        """Natural source/input rate S_i(t) [energy/yr]."""
         if system == 'solar':
             return 5.0 * (1.0 + 0.3 * np.cos(2 * np.pi * t / 11.0))
         elif system == 'magnetic':
@@ -187,51 +244,159 @@ class ConvergencePredictor:
         else:  # oceanic
             return 1.0 * (1.0 + 0.02 * t)
 
+    def anthropogenic_source(self, system: str, t: float) -> float:
+        """Anthropogenic energy injection A_i(t) [energy/yr].
+
+        Geological stored energy is released primarily into the
+        atmospheric and oceanic subsystems.  The atmospheric fraction
+        represents direct radiative forcing from GHGs; the oceanic
+        fraction represents ocean heat uptake.
+        """
+        anthro = self.params.anthropogenic
+        if anthro is None:
+            return 0.0
+
+        A_total = anthro.release_rate(t)
+
+        if system == 'atmospheric':
+            return anthro.atm_fraction * A_total
+        elif system == 'oceanic':
+            return (1.0 - anthro.atm_fraction) * A_total
+        else:
+            return 0.0
+
+    # ── State-dependent parameters ────────────────────────────────
+
+    def effective_alpha(self, system: str, E: list, t: float) -> float:
+        """Effective retention rate alpha_i(E, t) [1/yr].
+
+        Anthropogenic forcing increases atmospheric retention:
+            alpha_atm_eff = alpha_base * (1 + k * ln(1 + A(t)/A_0))
+
+        Physical basis: more CO2 → more greenhouse trapping → more
+        outgoing longwave radiation is absorbed and re-emitted downward.
+        The logarithmic form matches the radiative forcing relationship.
+
+        Oceanic retention also increases (thermal stratification from
+        surface warming reduces vertical mixing, trapping heat):
+            alpha_ocean_eff = alpha_base * (1 + k/2 * (E_ocean - E_ref)/E_ref)
+        """
+        p = self.params
+        alpha_base = p.alpha_retention[system]
+        anthro = p.anthropogenic
+
+        if anthro is None:
+            return alpha_base
+
+        A_t = anthro.release_rate(t)
+
+        if system == 'atmospheric':
+            # Logarithmic response (mirrors CO2 radiative forcing)
+            k = anthro.alpha_sensitivity
+            return alpha_base * (1.0 + k * np.log(1.0 + A_t / anthro.A_0))
+
+        elif system == 'oceanic':
+            # Stratification feedback: warmer surface → less mixing → more retention
+            E_ocean = E[self._sys_idx['oceanic']]
+            E_ref = p.E_initial['oceanic']
+            k = anthro.alpha_sensitivity * 0.5
+            return alpha_base * (1.0 + k * max(0.0, E_ocean - E_ref) / E_ref)
+
+        return alpha_base
+
+    def effective_coupling(self, sys_i: str, sys_j: str,
+                           E: list, t: float) -> Tuple[float, float]:
+        """Effective coupling (rate, efficiency) for transfer j → i.
+
+        Coupling strengthens with energy gradients between systems:
+            c_eff = c_base * (1 + beta * |E_j - E_i| / E_ref)
+
+        Physical basis: larger temperature/energy gradients drive
+        stronger fluxes (Clausius-Clapeyron for moisture, Fourier's
+        law for heat, Ohm's law for currents).
+
+        Conversion efficiency shifts with total system energy:
+            eta_eff = eta_base * (1 + delta * (E_total - E_ref) / E_ref)
+            clamped to [0.01, 0.95] to respect thermodynamic limits.
+
+        At higher total energy, conversion processes are more vigorous
+        (higher T → faster reaction kinetics, more turbulent mixing)
+        but capped below 1.0 (no perpetual motion).
+        """
+        p = self.params
+        entry = p.coupling.get((sys_i, sys_j))
+        if entry is None:
+            return (0.0, 0.0)
+
+        c_base, eta_base = entry
+        anthro = p.anthropogenic
+
+        if anthro is None:
+            return (c_base, eta_base)
+
+        i = self._sys_idx[sys_i]
+        j = self._sys_idx[sys_j]
+        E_total = sum(E)
+        E_ref = sum(p.E_initial.values())
+
+        # Coupling rate scales with gradient
+        beta = anthro.coupling_sensitivity
+        gradient = abs(E[j] - E[i])
+        E_scale = max(p.E_initial[sys_j], 1.0)
+        c_eff = c_base * (1.0 + beta * gradient / E_scale)
+
+        # Efficiency shifts with total energy
+        delta = anthro.efficiency_shift
+        eta_eff = eta_base * (1.0 + delta * (E_total - E_ref))
+        eta_eff = max(0.01, min(0.95, eta_eff))
+
+        return (c_eff, eta_eff)
+
+    # ── ODE ───────────────────────────────────────────────────────
+
     def energy_derivative(self, E: list, t: float) -> list:
         """RHS of the coupled ODE system.
 
-        dE_i/dt = S_i(t) + (alpha_i - lambda_i)*E_i - gamma_i*E_i^2
-                  + sum_j [eta_(i,j) * c_(i,j) * E_j]   (energy received)
-                  - sum_j [c_(j,i) * E_i]                (energy sent)
-
-        Coupling is conservative: what system j sends (c*E_j), system i
-        receives only eta*c*E_j.  The rest (1-eta)*c*E_j is waste heat.
+        dE_i/dt = S_i(t) + A_i(t)
+                  + (alpha_i(E,t) - lambda_i) * E_i
+                  - gamma_i * E_i^2
+                  + sum_j [eta_ij(E)*c_ij(E)*E_j]   (received)
+                  - sum_j [c_ji(E)*E_i]               (sent)
         """
         p = self.params
         dE_dt = []
 
         for i, sys_i in enumerate(SYSTEMS):
             E_i = E[i]
-            alpha = p.alpha_retention[sys_i]
+            alpha = self.effective_alpha(sys_i, E, t)
             lam = p.lambda_dissipation[sys_i]
             gam = p.gamma_nonlinear[sys_i]
 
             source = self.source_rate(sys_i, t)
+            anthro = self.anthropogenic_source(sys_i, t)
             net_retention = (alpha - lam) * E_i
             nonlinear_loss = gam * E_i ** 2
 
-            # Energy received from other systems (converted)
+            # Energy received from other systems
             coupling_in = 0.0
             for j, sys_j in enumerate(SYSTEMS):
                 if j != i:
-                    entry = p.coupling.get((sys_i, sys_j))
-                    if entry is not None:
-                        c_ij, eta_ij = entry
-                        coupling_in += eta_ij * c_ij * E[j]
+                    c_ij, eta_ij = self.effective_coupling(sys_i, sys_j, E, t)
+                    coupling_in += eta_ij * c_ij * E[j]
 
-            # Energy sent to other systems (full amount leaves)
+            # Energy sent to other systems
             coupling_out = 0.0
             for j, sys_j in enumerate(SYSTEMS):
                 if j != i:
-                    entry = p.coupling.get((sys_j, sys_i))
-                    if entry is not None:
-                        c_ji, _ = entry
-                        coupling_out += c_ji * E_i
+                    c_ji, _ = self.effective_coupling(sys_j, sys_i, E, t)
+                    coupling_out += c_ji * E_i
 
-            dE_dt.append(source + net_retention - nonlinear_loss
+            dE_dt.append(source + anthro + net_retention - nonlinear_loss
                          + coupling_in - coupling_out)
 
         return dE_dt
+
+    # ── Integration ───────────────────────────────────────────────
 
     def predict_convergence(self, years: float = 3.0) -> Tuple[np.ndarray, np.ndarray]:
         """Integrate the ODE forward in time.
@@ -247,12 +412,7 @@ class ConvergencePredictor:
         return t, solution
 
     def classify_phases(self, solution: np.ndarray) -> Tuple[np.ndarray, list]:
-        """Classify each timestep into a phase based on total energy.
-
-        Returns:
-            total_energy: shape (N,)
-            phases: list of int (1-4)
-        """
+        """Classify each timestep into a phase based on total energy."""
         thresholds = self.params.phase_thresholds
         total_energy = np.sum(solution, axis=1)
         phases = []
@@ -272,54 +432,36 @@ class ExtendedConvergencePredictor(ConvergencePredictor):
     """Convergence model with external stochastic forcing.
 
     External events are pre-generated before integration so the ODE RHS
-    remains deterministic (required for reliable ODE solver behaviour).
-
-    Additional dissipation from uncharacterised sinks (volcanic, seismic)
-    is modelled as a saturating linear term:
-
-        D_unk(E_tot) = mu * E_tot * max(0.1, 1 - E_tot / E_sat)
-
-    where mu is the baseline sink fraction and E_sat is the saturation energy.
+    remains deterministic.
     """
 
     def __init__(self, params: Optional[SystemParameters] = None):
         super().__init__(params)
-
-        # Meteor impact parameters
-        self.meteor_rate = 0.5            # events/yr (Poisson rate)
-        self.meteor_energy_range = (1.0, 15.0)  # [energy units]
-
-        # Satellite launch parameters
-        self.launches_per_year = 150      # global launch cadence
-        self.launch_energy = 2.0          # ionospheric perturbation per launch
-
-        # Unknown sink parameters
-        self.sink_baseline = 0.15         # fractional loss rate at low E [1/yr]
-        self.sink_saturation_energy = 800.0  # energy where sinks saturate
-
-        # Pre-generated events (populated by predict_convergence)
+        self.meteor_rate = 0.5
+        self.meteor_energy_range = (1.0, 15.0)
+        self.launches_per_year = 150
+        self.launch_energy = 2.0
+        self.sink_baseline = 0.15
+        self.sink_saturation_energy = 800.0
         self.events: List[ExternalEvent] = []
 
     def _generate_events(self, years: float) -> List[ExternalEvent]:
         """Pre-generate all stochastic external events."""
         events = []
 
-        # Meteor / bolide impacts (Poisson process)
         n_meteors = np.random.poisson(self.meteor_rate * years)
         for _ in range(n_meteors):
             t = np.random.uniform(0, years)
             energy = np.random.uniform(*self.meteor_energy_range)
             events.append(ExternalEvent(t, energy, 'meteor'))
 
-        # Satellite launches (quasi-periodic with jitter)
         n_launches = int(self.launches_per_year * years)
         for i in range(n_launches):
             t = (i / self.launches_per_year) + np.random.uniform(-0.01, 0.01)
             if 0 <= t < years:
                 events.append(ExternalEvent(t, self.launch_energy, 'launch'))
 
-        # Volcanic / seismic dissipation events (Poisson, ~5% chance per month)
-        n_volcanic = np.random.poisson(0.6 * years)  # ~0.6 events/yr
+        n_volcanic = np.random.poisson(0.6 * years)
         for _ in range(n_volcanic):
             t = np.random.uniform(0, years)
             energy = np.random.uniform(5, 25)
@@ -328,35 +470,22 @@ class ExtendedConvergencePredictor(ConvergencePredictor):
         return sorted(events, key=lambda e: e.time)
 
     def _event_forcing(self, t: float) -> float:
-        """Sum external event contributions at time t.
-
-        Each event is modelled as a Gaussian pulse with width = event.duration:
-            F(t) = energy / (duration * sqrt(2*pi)) * exp(-0.5*((t - t0)/duration)^2)
-        This avoids the original approach of point-matching with a tolerance,
-        which missed events between ODE solver adaptive steps.
-        """
+        """Sum external event contributions at time t (Gaussian pulses)."""
         total = 0.0
         for event in self.events:
             dt = (t - event.time) / event.duration
-            if abs(dt) < 5:  # truncate at 5 sigma for speed
+            if abs(dt) < 5:
                 total += (event.energy / (event.duration * np.sqrt(2 * np.pi))
                           * np.exp(-0.5 * dt ** 2))
         return total
 
     def _unknown_sink_rate(self, E_total: float) -> float:
-        """Saturating dissipation from uncharacterised geophysical sinks.
-
-        Returns a dissipation rate [energy/yr] that is subtracted from dE/dt.
-        """
+        """Saturating dissipation from uncharacterised geophysical sinks."""
         sat = max(0.1, 1.0 - E_total / self.sink_saturation_energy)
         return self.sink_baseline * E_total * sat
 
     def energy_derivative(self, E: list, t: float) -> list:
-        """RHS with external forcing and unknown sinks added.
-
-        When no events are loaded (include_external=False), this reduces
-        exactly to the base ConvergencePredictor ODE.
-        """
+        """RHS with external forcing and unknown sinks added."""
         dE_dt = super().energy_derivative(E, t)
 
         if not self.events:
@@ -377,13 +506,7 @@ class ExtendedConvergencePredictor(ConvergencePredictor):
     def predict_convergence(self, years: float = 3.0,
                             include_external: bool = True
                             ) -> Tuple[np.ndarray, np.ndarray, List[ExternalEvent]]:
-        """Integrate with optional external events.
-
-        Returns:
-            t: time array [years]
-            solution: energy array, shape (N, 4)
-            events: list of ExternalEvent used in this run
-        """
+        """Integrate with optional external events."""
         if include_external:
             self.events = self._generate_events(years)
         else:
@@ -404,7 +527,7 @@ class ExtendedConvergencePredictor(ConvergencePredictor):
         critical = []
         for event in events:
             if event.energy <= 0:
-                continue  # skip dissipation events
+                continue
             idx = np.argmin(np.abs(t - event.time))
             E_at = total_energy[idx]
             if E_at > threshold:
@@ -417,34 +540,52 @@ class ExtendedConvergencePredictor(ConvergencePredictor):
 
 
 if __name__ == "__main__":
-    predictor = ExtendedConvergencePredictor()
-
     print("CEED Convergence Model")
-    print("=" * 50)
+    print("=" * 60)
 
-    # Baseline run (no external events)
-    t_base, sol_base, _ = predictor.predict_convergence(years=3, include_external=False)
-    E_base, phases_base = predictor.classify_phases(sol_base)
+    # ── Baseline (no anthropogenic forcing) ──
+    params_base = SystemParameters()
+    base = ConvergencePredictor(params_base)
+    t_b, sol_b = base.predict_convergence(years=10)
+    E_b, ph_b = base.classify_phases(sol_b)
 
-    # Run with external events
-    t_ext, sol_ext, events = predictor.predict_convergence(years=3, include_external=True)
-    E_ext, phases_ext = predictor.classify_phases(sol_ext)
+    # ── With anthropogenic forcing ──
+    params_anthro = SystemParameters(
+        anthropogenic=AnthropogenicForcing()
+    )
+    anthro = ConvergencePredictor(params_anthro)
+    t_a, sol_a = anthro.predict_convergence(years=10)
+    E_a, ph_a = anthro.classify_phases(sol_a)
 
-    print(f"\nBASELINE (no external events):")
-    print(f"  Start: {E_base[0]:.1f} energy units")
-    print(f"  End:   {E_base[-1]:.1f} energy units")
-    print(f"  Peak phase: {max(phases_base)}")
+    print(f"\nBASELINE (no anthropogenic):")
+    print(f"  E_total: {E_b[0]:.1f} -> {E_b[-1]:.1f}")
+    print(f"  Peak phase: {max(ph_b)}")
 
-    print(f"\nWITH EXTERNAL EVENTS:")
-    print(f"  Start: {E_ext[0]:.1f} energy units")
-    print(f"  End:   {E_ext[-1]:.1f} energy units")
-    print(f"  Peak phase: {max(phases_ext)}")
-    print(f"  Total events: {len(events)}")
+    print(f"\nWITH ANTHROPOGENIC FORCING:")
+    print(f"  E_total: {E_a[0]:.1f} -> {E_a[-1]:.1f}")
+    print(f"  Peak phase: {max(ph_a)}")
+    af = params_anthro.anthropogenic
+    print(f"  A(t=0):  {af.release_rate(0):.2f} energy/yr")
+    print(f"  A(t=10): {af.release_rate(10):.2f} energy/yr")
+    print(f"  Cumulative release: {af.cumulative_release(10):.1f} energy")
 
-    critical = predictor.analyze_event_timing(t_ext, sol_ext, events)
-    if critical:
-        print(f"\nCRITICAL TIMING EVENTS: {len(critical)}")
-        for c in critical[:5]:
-            print(f"  {c['event'].event_type} at t={c['event'].time:.2f}yr: "
-                  f"E_total={c['system_energy']:.1f} "
-                  f"({c['amplification_risk']:.2f}x phase-2 threshold)")
+    # Show how parameters shifted
+    E_final = list(sol_a[-1])
+    alpha_base = params_anthro.alpha_retention['atmospheric']
+    alpha_eff = anthro.effective_alpha('atmospheric', E_final, 10.0)
+    print(f"\n  Atmospheric retention: {alpha_base:.4f} -> {alpha_eff:.4f} "
+          f"(+{(alpha_eff/alpha_base - 1)*100:.1f}%)")
+
+    c_base, eta_base = params_anthro.coupling[('oceanic', 'atmospheric')]
+    c_eff, eta_eff = anthro.effective_coupling('oceanic', 'atmospheric',
+                                                E_final, 10.0)
+    print(f"  Atm->Ocean coupling:  {c_base:.4f} -> {c_eff:.4f} "
+          f"(+{(c_eff/c_base - 1)*100:.1f}%)")
+    print(f"  Atm->Ocean efficiency: {eta_base:.2f} -> {eta_eff:.2f}")
+
+    # Show per-subsystem energy at end
+    print(f"\n  Final subsystem energies:")
+    for i, s in enumerate(SYSTEMS):
+        print(f"    {s:>12s}: {sol_b[-1, i]:7.1f} (base) -> "
+              f"{sol_a[-1, i]:7.1f} (anthro)  "
+              f"delta={sol_a[-1, i] - sol_b[-1, i]:+.1f}")

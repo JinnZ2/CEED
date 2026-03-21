@@ -61,22 +61,34 @@ Four coupled subsystems (solar, magnetic, atmospheric, oceanic), each with
 energy index E_i(t). The ODE is:
 
 ```
-dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
+dE_i/dt = S_i(t) + A_i(t)
+          + (alpha_i(E,t) - lambda_i) * E_i
+          - gamma_i * E_i^2
+          + sum_j [eta_ij(E) * c_ij(E) * E_j]   (received)
+          - sum_j [c_ji(E) * E_i]                (sent)
 ```
 
-- `S_i(t)`: source rate (solar cycle, secular trends)
-- `alpha_i * E_i`: retention — system self-reinforces (greenhouse trapping,
-  magnetic confinement, ocean thermal inertia)
-- `lambda_i * E_i`: linear dissipation (radiative loss, particle precipitation)
-- `gamma_i * E_i^2`: nonlinear dissipation — 2nd law guarantee that
-  dissipation dominates at high E (bounded solutions)
-- `eta_ij * c_ij * E_j`: energy received from system j (with conversion loss)
-- `c_ji * E_i`: energy sent to system j (full amount leaves)
-- `(1 - eta) * c * E`: waste heat from conversion (2nd law entropy cost)
+- `S_i(t)`: natural source rate (solar cycle, secular trends)
+- `A_i(t)`: anthropogenic forcing — geological energy release (fossil fuels)
+- `alpha_i(E,t) * E_i`: retention — state-dependent, increases with
+  anthropogenic load (more CO2 → more greenhouse trapping)
+- `lambda_i * E_i`: linear dissipation (radiative loss)
+- `gamma_i * E_i^2`: nonlinear dissipation — 2nd law bound
+- `eta_ij * c_ij * E_j`: energy received (with conversion loss)
+- `c_ji * E_i`: energy sent (full amount leaves)
 
-Coupling is **conservative**: 9 physically motivated pathways (primary +
-secondary) with conversion efficiencies 5-40%.  Every transfer produces
-waste heat.  See `Docs/CEED-model-specs.md` for the full coupling matrix.
+**Anthropogenic forcing** (`AnthropogenicForcing`): models ~300 Myr of stored
+solar energy released in ~200 yr. Logistic growth with resource peak.
+Modifies not just source terms but system parameters themselves:
+
+- Atmospheric retention increases logarithmically with load (greenhouse)
+- Oceanic retention increases with surface warming (stratification)
+- Coupling rates strengthen with energy gradients (Clausius-Clapeyron)
+- Conversion efficiencies shift with total system energy
+
+Coupling is **conservative**: 9 pathways with conversion efficiencies 5-40%.
+Every transfer produces waste heat. See `Docs/CEED-model-specs.md` for
+the full coupling matrix.
 
 1st law: energy in = energy retained + energy dissipated + energy transferred.
 When `alpha > lambda`, the system accumulates until `gamma * E^2` restores balance.
@@ -127,13 +139,17 @@ Tests use **pytest** and live in `Tests/test-convergence-model.py`.
 
 Run: `pytest Tests/test-convergence-model.py -v`
 
-Key test properties verified:
+Key test properties verified (21 tests):
 - Model initialization and output shape
 - Phase classification range (1-4)
 - ODE stays finite over long horizons (no blowup)
 - Dissipation bounds growth (no source -> energy decays)
 - ODE RHS is deterministic (no stochastic calls inside derivatives)
+- Coupling is conservative (all eta in (0,1], waste heat produced)
 - Extended model without events matches baseline exactly
+- Anthropogenic forcing grows, peaks (logistic), increases total energy
+- State-dependent params: no-anthro returns baseline, anthro increases
+  retention and coupling, efficiency stays clamped [0.01, 0.95]
 
 ## Guidelines for AI Assistants
 
@@ -147,7 +163,10 @@ Key test properties verified:
    2nd law — nonlinear dissipation (gamma*E^2) must dominate at high E,
    ensuring bounded solutions. Never remove retention without physical
    justification.
-4. **Scientific accuracy**: Parameters must be traceable to IPCC AR6 or
+4. **State-dependent parameters**: When anthropogenic forcing is enabled,
+   alpha, c, and eta become functions of (E, t). Any new parameter
+   modification must have a physical mechanism documented in the docstring.
+5. **Scientific accuracy**: Parameters must be traceable to IPCC AR6 or
    cited literature. Do not invent physical constants.
 5. **Phase thresholds**: The 4-phase classification (120/150/200/300) is a
    core design choice. Do not change without explicit request.

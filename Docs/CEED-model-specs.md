@@ -127,9 +127,63 @@ Format: transfer_rate (conversion_efficiency).  Read as "row receives from colum
 | Magnetic → Solar      | 0.0005 | 10%  | Magnetospheric return flow              |
 | Oceanic → Magnetic    | 0.0001 | 5%   | EM induction in saltwater (Swarm data)  |
 
-### 1.6 External Forcing (Extended Model)
+### 1.6 Anthropogenic Forcing
 
-The `ExtendedConvergencePredictor` adds:
+File: `simulation/convergence_model.py`, class `AnthropogenicForcing`
+
+Fossil fuels represent ~300 Myr of stored photosynthetic energy released
+over ~200 yr — a 1.5-million-fold temporal compression.  This release:
+
+1. Adds a source term A_i(t) to atmospheric (55%) and oceanic (45%) subsystems
+2. Modifies the system's own parameters (state-dependent feedback)
+
+#### Release profile
+
+Logistic growth with resource-constrained peak:
+
+```
+A(t) = A_max / (1 + (A_max/A_0 - 1) * exp(-r*t))
+```
+
+| Parameter  | Default | Meaning                       |
+|------------|---------|-------------------------------|
+| A_0        | 8.0     | Current release rate [energy/yr] |
+| r          | 0.02    | Growth rate (2%/yr historical) |
+| peak_year  | 50      | Resource peak timing [yr]     |
+| A_max      | A_0*e^(r*peak) | Asymptotic maximum   |
+
+#### State-dependent parameter modifications
+
+**Retention** (atmospheric):
+```
+alpha_atm_eff = alpha_base * (1 + k * ln(1 + A(t)/A_0))
+```
+More CO2 → more greenhouse trapping → higher retention.
+Logarithmic form matches radiative forcing relationship (Myhre et al. 1998).
+
+**Retention** (oceanic):
+```
+alpha_ocean_eff = alpha_base * (1 + k/2 * max(0, E_ocean - E_ref) / E_ref)
+```
+Warmer surface → thermal stratification → less vertical mixing → more retention.
+
+**Coupling rates** (all pathways):
+```
+c_eff = c_base * (1 + beta * |E_j - E_i| / E_scale)
+```
+Larger energy gradients drive stronger fluxes (Clausius-Clapeyron,
+Fourier's law, Ohm's law).
+
+**Conversion efficiencies** (all pathways):
+```
+eta_eff = clamp(eta_base * (1 + delta * (E_total - E_ref)), 0.01, 0.95)
+```
+Higher total energy → more vigorous conversion processes, but capped
+below 1.0 (no perpetual motion — 2nd law).
+
+### 1.7 External Forcing (Extended Model)
+
+The `ExtendedConvergencePredictor` adds stochastic events:
 
 - **Meteor/bolide events**: Poisson process, rate 0.5/yr, energy 1–15 units.
 - **Satellite launches**: ~150/yr, 2.0 energy units each.
