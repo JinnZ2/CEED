@@ -93,16 +93,39 @@ particle precipitation).  It guarantees bounded solutions.
 
 ### 1.5 Cross-System Coupling
 
-Only physically motivated couplings are nonzero:
+Coupling is **conservative**: when system j transfers energy to system i at
+rate `c * E_j`, system i receives only `eta * c * E_j`.  The remainder
+`(1 - eta) * c * E_j` is dissipated as waste heat (2nd law entropy cost).
 
-| From → To              | c_ij  | Physical mechanism                |
-|-------------------------|-------|-----------------------------------|
-| Solar → Magnetic        | 0.005 | Solar wind drives geomagnetic storms |
-| Solar → Atmospheric     | 0.003 | EUV heating of thermosphere       |
-| Magnetic → Atmospheric  | 0.002 | Joule heating from auroral currents |
-| Atmospheric → Oceanic   | 0.001 | Air-sea heat flux                 |
+#### Coupling Matrix
 
-All other c_ij = 0.
+|               | ← Solar      | ← Magnetic   | ← Atmospheric | ← Oceanic   |
+|---------------|--------------|--------------|---------------|-------------|
+| → Solar       | —            | 0.0005 (10%) | ·             | ·           |
+| → Magnetic    | 0.005 (15%)  | —            | 0.0005 (10%)  | 0.0001 (5%) |
+| → Atmospheric | 0.003 (30%)  | 0.002 (25%)  | —             | 0.003 (30%) |
+| → Oceanic     | 0.001 (40%)  | ·            | 0.002 (35%)   | —           |
+
+Format: transfer_rate (conversion_efficiency).  Read as "row receives from column."
+
+#### Primary Couplings (direct mechanisms)
+
+| From → To            | Rate  | η    | Mechanism                               |
+|-----------------------|-------|------|-----------------------------------------|
+| Solar → Magnetic      | 0.005 | 15%  | Solar wind magnetic reconnection        |
+| Solar → Atmospheric   | 0.003 | 30%  | EUV/UV absorption by thermosphere       |
+| Solar → Oceanic       | 0.001 | 40%  | Shortwave penetration into ocean        |
+| Magnetic → Atmospheric| 0.002 | 25%  | Joule heating + particle precipitation  |
+| Atmospheric → Oceanic | 0.002 | 35%  | Air-sea sensible + latent heat flux     |
+
+#### Secondary Couplings (feedback pathways)
+
+| From → To            | Rate   | η    | Mechanism                               |
+|-----------------------|--------|------|-----------------------------------------|
+| Oceanic → Atmospheric | 0.003  | 30%  | Evaporation, sensible heat, ENSO        |
+| Atmospheric → Magnetic| 0.0005 | 10%  | Ionospheric dynamo currents             |
+| Magnetic → Solar      | 0.0005 | 10%  | Magnetospheric return flow              |
+| Oceanic → Magnetic    | 0.0001 | 5%   | EM induction in saltwater (Swarm data)  |
 
 ### 1.6 External Forcing (Extended Model)
 

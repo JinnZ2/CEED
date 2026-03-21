@@ -22,19 +22,27 @@ where:
     gamma_i      : nonlinear dissipation [1/(energy*yr)] — dominates at
                    high E, ensuring bounded solutions (2nd law: entropy
                    production increases with energy, enhanced radiation)
-    c_ij         : cross-system coupling [1/yr]
+    c_ij         : transfer rate from system j to system i [1/yr]
+    eta_ij       : conversion efficiency from j to i [dimensionless, 0-1]
     F_ext_i(t)   : external forcing (meteors, launches, volcanic) [energy/yr]
 
+Cross-system coupling is conservative.  When system j transfers energy
+to system i at rate c_ij * E_j:
+
+    system i gains:  eta_ij * c_ij * E_j   (converted fraction)
+    system j loses:  c_ij * E_j            (total transferred)
+    waste heat:      (1 - eta_ij) * c_ij * E_j   (2nd law entropy cost)
+
 Energy conservation (1st law): energy entering the system either stays
-(retention) or leaves (dissipation).  The net rate (alpha - lambda) controls
-whether the system accumulates or loses energy.  CEED's thesis: when
-alpha_i >= lambda_i across multiple coupled subsystems, energy accumulates
-until nonlinear dissipation (gamma * E^2) restores balance — or the system
-transitions to a new state.
+(retention) or leaves (dissipation + transfer to other systems).
+The net rate (alpha - lambda) controls whether the system accumulates
+or loses energy.  CEED's thesis: when alpha_i >= lambda_i across multiple
+coupled subsystems, energy accumulates until nonlinear dissipation
+(gamma * E^2) restores balance — or the system transitions to a new state.
 
 2nd law constraint: gamma_i > 0 guarantees that dissipation always wins
-at sufficiently high E (entropy production scales superlinearly with
-energy flux), preventing unphysical unbounded growth.
+at sufficiently high E.  Conversion efficiencies eta_ij < 1 guarantee
+that every energy transfer produces entropy.
 """
 
 import numpy as np
@@ -112,18 +120,38 @@ class SystemParameters:
         'oceanic': 0.0002,
     })
 
-    # Cross-system coupling matrix c_ij [1/yr]
-    # c_ij > 0 means energy in system j drives growth in system i.
-    # Only physically motivated couplings are nonzero.
+    # Cross-system coupling: transfer rates c_ij [1/yr] and
+    # conversion efficiencies eta_ij [dimensionless].
+    #
+    # Key (i, j) means "from j to i": system j loses c*E_j,
+    # system i gains eta*c*E_j, difference is waste heat (2nd law).
+    #
+    # PRIMARY COUPLINGS (direct physical mechanisms):
+    #   solar → magnetic    : solar wind reconnection (~15% efficient)
+    #   solar → atmospheric : EUV/UV absorption by thermosphere (~30%)
+    #   solar → oceanic     : shortwave penetration into ocean (~40%)
+    #   magnetic → atmospheric : Joule heating + particle precipitation (~25%)
+    #   atmospheric → oceanic  : air-sea sensible + latent heat flux (~35%)
+    #
+    # SECONDARY COUPLINGS (feedback pathways):
+    #   oceanic → atmospheric  : evaporation, sensible heat, ENSO (~30%)
+    #   atmospheric → magnetic : ionospheric dynamo currents (~10%)
+    #   magnetic → solar       : magnetospheric return flow (~10%)
+    #   oceanic → magnetic     : EM induction in saltwater (~5%, Swarm-measured)
+    #
+    # Format: (to, from): (transfer_rate, conversion_efficiency)
     coupling: dict = field(default_factory=lambda: {
-        # solar -> magnetic: geomagnetic storms driven by solar wind
-        ('magnetic', 'solar'): 0.005,
-        # solar -> atmospheric: EUV heating of thermosphere
-        ('atmospheric', 'solar'): 0.003,
-        # magnetic -> atmospheric: Joule heating from auroral currents
-        ('atmospheric', 'magnetic'): 0.002,
-        # atmospheric -> oceanic: air-sea heat flux
-        ('oceanic', 'atmospheric'): 0.001,
+        # Primary couplings
+        ('magnetic', 'solar'):       (0.005, 0.15),
+        ('atmospheric', 'solar'):    (0.003, 0.30),
+        ('oceanic', 'solar'):        (0.001, 0.40),
+        ('atmospheric', 'magnetic'): (0.002, 0.25),
+        ('oceanic', 'atmospheric'):  (0.002, 0.35),
+        # Secondary couplings (feedback)
+        ('atmospheric', 'oceanic'):  (0.003, 0.30),
+        ('magnetic', 'atmospheric'): (0.0005, 0.10),
+        ('solar', 'magnetic'):       (0.0005, 0.10),
+        ('magnetic', 'oceanic'):     (0.0001, 0.05),
     })
 
     # Phase classification thresholds on total energy [energy units]
@@ -163,11 +191,11 @@ class ConvergencePredictor:
         """RHS of the coupled ODE system.
 
         dE_i/dt = S_i(t) + (alpha_i - lambda_i)*E_i - gamma_i*E_i^2
-                  + sum_j c_ij*E_j
+                  + sum_j [eta_(i,j) * c_(i,j) * E_j]   (energy received)
+                  - sum_j [c_(j,i) * E_i]                (energy sent)
 
-        The (alpha - lambda) term is the net retention: positive means the
-        system accumulates energy faster than it radiates.  The gamma*E^2
-        term ensures dissipation always wins at high E (2nd law).
+        Coupling is conservative: what system j sends (c*E_j), system i
+        receives only eta*c*E_j.  The rest (1-eta)*c*E_j is waste heat.
         """
         p = self.params
         dE_dt = []
@@ -179,17 +207,29 @@ class ConvergencePredictor:
             gam = p.gamma_nonlinear[sys_i]
 
             source = self.source_rate(sys_i, t)
-            net_retention = (alpha - lam) * E_i   # >0 when accumulating
-            nonlinear_loss = gam * E_i ** 2        # always positive, grows with E
+            net_retention = (alpha - lam) * E_i
+            nonlinear_loss = gam * E_i ** 2
 
-            # Cross-system coupling: sum over j != i
-            coupling_gain = 0.0
+            # Energy received from other systems (converted)
+            coupling_in = 0.0
             for j, sys_j in enumerate(SYSTEMS):
                 if j != i:
-                    c_ij = p.coupling.get((sys_i, sys_j), 0.0)
-                    coupling_gain += c_ij * E[j]
+                    entry = p.coupling.get((sys_i, sys_j))
+                    if entry is not None:
+                        c_ij, eta_ij = entry
+                        coupling_in += eta_ij * c_ij * E[j]
 
-            dE_dt.append(source + net_retention - nonlinear_loss + coupling_gain)
+            # Energy sent to other systems (full amount leaves)
+            coupling_out = 0.0
+            for j, sys_j in enumerate(SYSTEMS):
+                if j != i:
+                    entry = p.coupling.get((sys_j, sys_i))
+                    if entry is not None:
+                        c_ji, _ = entry
+                        coupling_out += c_ji * E_i
+
+            dE_dt.append(source + net_retention - nonlinear_loss
+                         + coupling_in - coupling_out)
 
         return dE_dt
 

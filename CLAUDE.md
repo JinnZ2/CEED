@@ -70,10 +70,16 @@ dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2 + sum_j(c_ij * E
 - `lambda_i * E_i`: linear dissipation (radiative loss, particle precipitation)
 - `gamma_i * E_i^2`: nonlinear dissipation — 2nd law guarantee that
   dissipation dominates at high E (bounded solutions)
-- `c_ij * E_j`: cross-system coupling (only physically motivated pairs)
+- `eta_ij * c_ij * E_j`: energy received from system j (with conversion loss)
+- `c_ji * E_i`: energy sent to system j (full amount leaves)
+- `(1 - eta) * c * E`: waste heat from conversion (2nd law entropy cost)
 
-1st law: energy in = energy retained + energy dissipated. When `alpha > lambda`,
-the system accumulates energy until `gamma * E^2` restores balance.
+Coupling is **conservative**: 9 physically motivated pathways (primary +
+secondary) with conversion efficiencies 5-40%.  Every transfer produces
+waste heat.  See `Docs/CEED-model-specs.md` for the full coupling matrix.
+
+1st law: energy in = energy retained + energy dissipated + energy transferred.
+When `alpha > lambda`, the system accumulates until `gamma * E^2` restores balance.
 
 The extended model adds pre-generated external events (Gaussian pulses) and
 a saturating unknown-sink term.

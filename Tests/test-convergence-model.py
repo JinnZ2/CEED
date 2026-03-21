@@ -92,3 +92,36 @@ def test_extended_stays_finite():
     np.random.seed(42)
     t, solution, _ = predictor.predict_convergence(years=5)
     assert np.all(np.isfinite(solution))
+
+
+def test_coupling_is_conservative():
+    """Energy transferred out of j must >= energy received by i (eta <= 1)."""
+    params = SystemParameters()
+    for (sys_i, sys_j), (c_ij, eta_ij) in params.coupling.items():
+        assert 0 < eta_ij <= 1.0, (
+            f"Conversion efficiency {sys_j}->{sys_i} = {eta_ij}, "
+            f"must be in (0, 1]"
+        )
+        assert c_ij > 0, f"Transfer rate {sys_j}->{sys_i} must be positive"
+
+
+def test_coupling_produces_waste_heat():
+    """Total system energy should decrease from coupling alone (eta < 1).
+
+    With only coupling active (no source, no retention, no dissipation),
+    total energy must decrease because every transfer loses (1-eta) to waste.
+    """
+    params = SystemParameters()
+    params.alpha_retention = {s: 0.0 for s in SYSTEMS}
+    params.lambda_dissipation = {s: 0.0 for s in SYSTEMS}
+    params.gamma_nonlinear = {s: 0.0 for s in SYSTEMS}
+    predictor = ConvergencePredictor(params)
+    predictor.source_rate = lambda system, t: 0.0
+
+    E = [180.0, 92.5, 118.0, 110.0]
+    dE = predictor.energy_derivative(E, 0.0)
+    # Total dE/dt should be negative (waste heat from conversion losses)
+    assert sum(dE) < 0, (
+        f"Total dE/dt = {sum(dE):.6f}, should be negative "
+        f"(coupling must produce waste heat)"
+    )
