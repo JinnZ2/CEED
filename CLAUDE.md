@@ -44,6 +44,7 @@ CEED/
 | Run simulation | `python simulation/convergence_model.py` |
 | Run ESM | `python simulation/minimum_esm_code.py --plot` |
 | Run Monte Carlo | `python experiments/run_mc.py --n 200 --horizon 10` |
+| Run hindcast | `python -m simulation.hindcast --compare` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -95,6 +96,37 @@ When `alpha > lambda`, the system accumulates until `gamma * E^2` restores balan
 
 The extended model adds pre-generated external events (Gaussian pulses) and
 a saturating unknown-sink term.
+
+### Unit Bridge (`simulation/unit_bridge.py`)
+
+Maps between model energy indices and physical observables:
+
+| Subsystem   | Observable                | Units    | Scale              |
+|-------------|---------------------------|----------|--------------------|
+| Solar       | F10.7 radio flux          | sfu      | 1 sfu ≈ 1 E-unit   |
+| Magnetic    | Kp geomagnetic index      | Kp       | 1 Kp ≈ 20 E-units  |
+| Atmospheric | Global mean temp anomaly  | K        | 1 K ≈ 20 E-units   |
+| Oceanic     | Ocean heat content 0-700m | 10²² J   | 1×10²² J ≈ 3.3 E   |
+
+Reference year: 2015 (model t=0). Historical data from NOAA, NASA GISS,
+GFZ Potsdam, HadCRUT5 for 2010-2024.
+
+### Hindcast Framework (`simulation/hindcast.py`)
+
+Validates model against historical observations using:
+- RMSE, MAE, R², NRMSE, Bias
+- Letter grades (A-F) based on R² and NRMSE
+- Baseline vs anthropogenic comparison
+
+Run: `python -m simulation.hindcast --compare`
+
+Current hindcast scores (known calibration gaps documented):
+- **Oceanic with anthro: R²=0.60 (B)** — trend and magnitude correct
+- **Solar: F** — internal dynamics damp out 11-year cycle
+- **Magnetic: F** — needs stronger solar-driven component
+- **Atmospheric with anthro: F** — A_0 sensitivity too high
+
+These scores are the starting point for calibration, not the end state.
 
 ### Earth System Model (`simulation/minimum_esm_code.py`)
 
@@ -174,5 +206,8 @@ Key test properties verified (21 tests):
    ad-hoc retention/dissipation multipliers.
 7. **Run tests**: Always run `pytest Tests/test-convergence-model.py` after
    modifying simulation code.
-8. **No over-engineering**: This is a research/simulation project. Keep
+8. **Hindcast first**: After any parameter change, run
+   `python -m simulation.hindcast --compare` and check that scores
+   don't regress.  The hindcast is the ground truth.
+9. **No over-engineering**: This is a research/simulation project. Keep
    abstractions minimal and code readable to scientists.

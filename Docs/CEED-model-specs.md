@@ -356,6 +356,49 @@ Default: 200 samples, 10-year horizon.
 
 ---
 
+## 6. Unit Bridge
+
+File: `simulation/unit_bridge.py`
+
+Maps between model energy indices and physical observables:
+
+| Subsystem   | Observable              | Units    | obs_ref | E_ref | Scale |
+|-------------|-------------------------|----------|---------|-------|-------|
+| Solar       | F10.7 radio flux        | sfu      | 150.0   | 180.0 | 1.00  |
+| Magnetic    | Kp geomagnetic index    | Kp       | 2.0     | 92.5  | 0.05  |
+| Atmospheric | Global mean temp anomaly| K        | 1.1     | 118.0 | 0.05  |
+| Oceanic     | OHC 0-700m              | 10²² J   | 15.0    | 110.0 | 0.30  |
+
+Conversion: `E = (obs - obs_ref) / scale + E_ref`
+
+Reference year: 2015 (model t=0).
+
+---
+
+## 7. Hindcast Validation
+
+File: `simulation/hindcast.py`
+
+Runs the model against 2010-2024 observations and scores with R², RMSE,
+NRMSE, Bias, and letter grades (A-F).
+
+Run: `python -m simulation.hindcast --compare`
+
+### Current scores (as of initial calibration):
+
+| System      | Baseline R² | Anthro R² | Grade | Issue                     |
+|-------------|-------------|-----------|-------|---------------------------|
+| Solar       | -0.19       | -0.19     | F     | Cycle damped by dynamics  |
+| Magnetic    | -0.30       | -0.32     | F     | Needs solar-driven source |
+| Atmospheric | -2.59       | -96.6     | F     | A_0 sensitivity too high  |
+| Oceanic     | -3.20       | +0.60     | B     | Trend correct             |
+
+These scores document the model's current state and serve as the baseline
+for future calibration.  The hindcast framework is designed to be used
+iteratively by any AI or researcher.
+
+---
+
 ## Data Sources
 
 | Source                       | Data type                | Status   |
@@ -368,6 +411,8 @@ Default: 200 samples, 10-year horizon.
 | IPCC AR6 WG1 (2021)          | ECS, ERF, feedbacks      | Cited    |
 | Myhre et al. (1998)          | CO2 forcing formula      | Cited    |
 
+Hindcast validation uses 2010-2024 annual means from these sources.
+
 Note: the `Data/Inputs` directory currently contains mock data.
 Real-time API integration is planned.
 
@@ -375,9 +420,17 @@ Real-time API integration is planned.
 
 ## Limitations
 
-1. Convergence model uses normalised energy indices, not physical units.
-   Cross-system coupling coefficients are order-of-magnitude estimates.
-2. ESM is a two-variable (T, CO2) reduced model; it omits ocean
+1. Convergence model uses normalised energy indices with a documented
+   unit bridge to physical observables (`simulation/unit_bridge.py`).
+2. Source functions are phenomenological (tanh saturation, cosine cycle),
+   not derived from first principles.
+3. Solar cycle is damped by internal dynamics — the cycle amplitude in
+   source (~5 energy/yr) is small relative to the energy stock (~180).
+4. Anthropogenic forcing sensitivity (A_0) needs calibration against
+   observed atmospheric warming rate (~0.2 K/decade).
+5. ESM is a two-variable (T, CO2) reduced model; it omits ocean
    circulation dynamics, ice sheet dynamics, and regional variability.
-3. Cloud and permafrost feedbacks use simplified functional forms.
-4. Monte Carlo assumes parameter independence (no covariance structure).
+6. Cloud and permafrost feedbacks use simplified functional forms.
+7. Monte Carlo assumes parameter independence (no covariance structure).
+8. Hindcast scores are the ground truth for model quality.  Current
+   scores show the model needs significant calibration work.

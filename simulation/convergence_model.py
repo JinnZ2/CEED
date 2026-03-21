@@ -234,15 +234,25 @@ class ConvergencePredictor:
     # ── Source terms ──────────────────────────────────────────────
 
     def source_rate(self, system: str, t: float) -> float:
-        """Natural source/input rate S_i(t) [energy/yr]."""
+        """Natural source/input rate S_i(t) [energy/yr].
+
+        All sources are bounded to prevent unphysical growth.
+        Secular trends use tanh saturation.
+        """
         if system == 'solar':
+            # 11-year sunspot cycle (periodic, naturally bounded)
             return 5.0 * (1.0 + 0.3 * np.cos(2 * np.pi * t / 11.0))
         elif system == 'magnetic':
-            return -2.0 * (1.0 + 0.1 * t)
+            # Geomagnetic activity is driven by solar wind, not independent.
+            # Base rate is small positive (inner core dynamo sustains field).
+            # The solar coupling handles the solar-driven component.
+            return 1.0 * (1.0 - 0.3 * np.tanh(0.01 * t))
         elif system == 'atmospheric':
-            return 3.0 * (1.0 + 0.05 * t)
+            # Natural forcing trend, saturates
+            return 3.0 * (1.0 + 0.5 * np.tanh(0.03 * t))
         else:  # oceanic
-            return 1.0 * (1.0 + 0.02 * t)
+            # Ocean heat uptake trend, saturates
+            return 1.0 * (1.0 + 0.3 * np.tanh(0.02 * t))
 
     def anthropogenic_source(self, system: str, t: float) -> float:
         """Anthropogenic energy injection A_i(t) [energy/yr].
@@ -374,25 +384,37 @@ class ConvergencePredictor:
 
             source = self.source_rate(sys_i, t)
             anthro = self.anthropogenic_source(sys_i, t)
-            net_retention = (alpha - lam) * E_i
-            nonlinear_loss = gam * E_i ** 2
 
-            # Energy received from other systems
+            # Retention and dissipation only act on positive energy.
+            # At E=0 the system is empty — nothing to retain or dissipate.
+            # Soft floor via max(E_i, 0) prevents negative-energy runaway
+            # where gamma*E^2 would push further negative.
+            E_pos = max(E_i, 0.0)
+            net_retention = (alpha - lam) * E_pos
+            nonlinear_loss = gam * E_pos ** 2
+
+            # If E_i went negative (unphysical), add restoring force
+            # to push back toward zero.  This is a soft floor.
+            restoring = 0.0
+            if E_i < 0:
+                restoring = -E_i  # linear spring toward zero
+
+            # Energy received from other systems (only from positive E)
             coupling_in = 0.0
             for j, sys_j in enumerate(SYSTEMS):
                 if j != i:
                     c_ij, eta_ij = self.effective_coupling(sys_i, sys_j, E, t)
-                    coupling_in += eta_ij * c_ij * E[j]
+                    coupling_in += eta_ij * c_ij * max(E[j], 0.0)
 
-            # Energy sent to other systems
+            # Energy sent to other systems (only if we have energy)
             coupling_out = 0.0
             for j, sys_j in enumerate(SYSTEMS):
                 if j != i:
                     c_ji, _ = self.effective_coupling(sys_j, sys_i, E, t)
-                    coupling_out += c_ji * E_i
+                    coupling_out += c_ji * E_pos
 
             dE_dt.append(source + anthro + net_retention - nonlinear_loss
-                         + coupling_in - coupling_out)
+                         + coupling_in - coupling_out + restoring)
 
         return dE_dt
 

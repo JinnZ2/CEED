@@ -224,3 +224,16 @@ def test_anthro_increases_total_energy():
     E_base_final = np.sum(sol_b[-1])
     E_anthro_final = np.sum(sol_a[-1])
     assert E_anthro_final > E_base_final
+
+
+def test_long_horizon_stability():
+    """Model must stay finite and non-negative over 200 years."""
+    for params in [SystemParameters(),
+                   SystemParameters(anthropogenic=AnthropogenicForcing())]:
+        predictor = ConvergencePredictor(params)
+        t, solution = predictor.predict_convergence(years=200)
+        assert np.all(np.isfinite(solution)), "Solution went infinite"
+        # Energy should be non-negative (soft floor keeps it near zero)
+        assert np.all(solution > -1.0), (
+            f"Energy went significantly negative: min={solution.min():.1f}"
+        )
