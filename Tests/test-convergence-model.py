@@ -42,22 +42,19 @@ def test_energy_stays_finite():
 
 
 def test_dissipation_bounds_growth():
-    """With no source, energy should decay toward zero."""
+    """With no source and no retention, energy should decay toward zero."""
     params = SystemParameters()
-    # Zero out all sources by setting initial energies only
+    # Zero out retention so only dissipation acts
+    params.alpha_retention = {s: 0.0 for s in SYSTEMS}
+    params.coupling = {}
     predictor = ConvergencePredictor(params)
 
     # Override source_rate to return 0
     predictor.source_rate = lambda system, t: 0.0
 
-    # Set coupling to zero as well
-    params.coupling = {}
-    predictor.params = params
-
-    # Start with some energy
     t, solution = predictor.predict_convergence(years=5)
     total_energy = np.sum(solution, axis=1)
-    # Energy should decrease (dissipation only, no source)
+    # Energy should decrease (dissipation only, no source or retention)
     assert total_energy[-1] < total_energy[0]
 
 

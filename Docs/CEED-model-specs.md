@@ -37,7 +37,7 @@ Four coupled subsystems, each characterised by an energy-like index E_i(t):
 Each subsystem obeys an energy balance ODE:
 
 ```
-dE_i/dt = S_i(t) - lambda_i * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
+dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
 ```
 
 where:
@@ -45,9 +45,19 @@ where:
 | Symbol       | Meaning                               | Units           |
 |--------------|---------------------------------------|-----------------|
 | S_i(t)       | Source / input rate                    | energy / yr     |
+| alpha_i      | Retention rate (energy self-reinforcement) | 1 / yr      |
 | lambda_i     | Linear dissipation rate               | 1 / yr          |
 | gamma_i      | Nonlinear dissipation coefficient     | 1 / (energy·yr) |
 | c_ij         | Cross-system coupling coefficient     | 1 / yr          |
+
+**Energy conservation (1st law)**: energy entering the system either stays
+(retention, alpha) or leaves (dissipation, lambda + gamma*E).  The net rate
+`(alpha - lambda)` determines whether a subsystem accumulates or loses energy.
+
+**2nd law constraint**: `gamma_i > 0` ensures dissipation dominates at high E
+(entropy production scales superlinearly with energy flux), preventing
+unphysical unbounded growth.  Solutions always converge to a finite
+equilibrium.
 
 ### 1.3 Source Functions
 
@@ -58,18 +68,28 @@ S_atmospheric(t) = 3.0 * (1 + 0.05*t)                    [anthropogenic trend]
 S_oceanic(t)     = 1.0 * (1 + 0.02*t)                    [anthropogenic trend]
 ```
 
-### 1.4 Dissipation Parameters
+### 1.4 Retention and Dissipation Parameters
 
-| Subsystem   | lambda_i | gamma_i |
-|-------------|----------|---------|
-| Solar       | 0.05     | 0.001   |
-| Magnetic    | 0.02     | 0.001   |
-| Atmospheric | 0.08     | 0.001   |
-| Oceanic     | 0.01     | 0.001   |
+| Subsystem   | alpha_i | lambda_i | alpha-lambda | gamma_i |
+|-------------|---------|----------|--------------|---------|
+| Solar       | 0.06    | 0.05     | +0.01        | 0.0002  |
+| Magnetic    | 0.025   | 0.02     | +0.005       | 0.0002  |
+| Atmospheric | 0.09    | 0.08     | +0.01        | 0.0002  |
+| Oceanic     | 0.015   | 0.01     | +0.005       | 0.0002  |
 
-The linear term `lambda_i * E_i` represents natural decay processes.
-The quadratic term `gamma_i * E_i^2` prevents unbounded growth
-(physically: enhanced radiative or convective losses at high energy).
+All subsystems have `alpha > lambda` (net positive retention), meaning they
+accumulate energy at low-to-moderate levels.  This reflects the current
+physical state: Earth is gaining ~1 W/m² net energy.
+
+Physical basis for retention (alpha):
+- **Solar**: coronal magnetic confinement of plasma
+- **Magnetic**: ring current self-sustaining via gradient-curvature drift
+- **Atmospheric**: greenhouse trapping of outgoing longwave radiation
+- **Oceanic**: thermal inertia of deep ocean heat storage
+
+The quadratic term `gamma_i * E_i^2` represents enhanced dissipation at
+high energy (Stefan-Boltzmann T^4 scaling, enhanced convection, increased
+particle precipitation).  It guarantees bounded solutions.
 
 ### 1.5 Cross-System Coupling
 

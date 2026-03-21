@@ -61,13 +61,19 @@ Four coupled subsystems (solar, magnetic, atmospheric, oceanic), each with
 energy index E_i(t). The ODE is:
 
 ```
-dE_i/dt = S_i(t) - lambda_i * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
+dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j)
 ```
 
 - `S_i(t)`: source rate (solar cycle, secular trends)
-- `lambda_i * E_i`: linear dissipation
-- `gamma_i * E_i^2`: nonlinear dissipation (prevents unbounded growth)
+- `alpha_i * E_i`: retention — system self-reinforces (greenhouse trapping,
+  magnetic confinement, ocean thermal inertia)
+- `lambda_i * E_i`: linear dissipation (radiative loss, particle precipitation)
+- `gamma_i * E_i^2`: nonlinear dissipation — 2nd law guarantee that
+  dissipation dominates at high E (bounded solutions)
 - `c_ij * E_j`: cross-system coupling (only physically motivated pairs)
+
+1st law: energy in = energy retained + energy dissipated. When `alpha > lambda`,
+the system accumulates energy until `gamma * E^2` restores balance.
 
 The extended model adds pre-generated external events (Gaussian pulses) and
 a saturating unknown-sink term.
@@ -130,9 +136,11 @@ Key test properties verified:
    events before integration.
 2. **Dimensional consistency**: Every term in `dE/dt` must have units of
    [energy/time]. Document units in docstrings and parameter tables.
-3. **No runaway by construction**: Every model must include nonlinear
-   dissipation (quadratic or higher) that dominates at high energy,
-   ensuring solutions stay bounded.
+3. **Thermodynamic consistency**: 1st law — retention (alpha) and
+   dissipation (lambda) must both be present; energy doesn't vanish.
+   2nd law — nonlinear dissipation (gamma*E^2) must dominate at high E,
+   ensuring bounded solutions. Never remove retention without physical
+   justification.
 4. **Scientific accuracy**: Parameters must be traceable to IPCC AR6 or
    cited literature. Do not invent physical constants.
 5. **Phase thresholds**: The 4-phase classification (120/150/200/300) is a

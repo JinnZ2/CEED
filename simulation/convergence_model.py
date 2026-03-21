@@ -2,19 +2,39 @@
 CEED Convergence Model
 Multi-system energy balance with cross-domain coupling.
 
-Each subsystem obeys an energy balance ODE:
+Each subsystem tracks a stored energy index E_i(t) governed by:
 
-    dE_i/dt = S_i(t) - lambda_i * E_i - gamma_i * E_i^2 + sum_j(c_ij * E_j) + F_ext_i(t)
+    dE_i/dt = S_i(t) + alpha_i * E_i - lambda_i * E_i - gamma_i * E_i^2
+              + sum_j(c_ij * E_j) + F_ext_i(t)
+
+which can be written:
+
+    dE_i/dt = S_i(t) + (alpha_i - lambda_i) * E_i - gamma_i * E_i^2
+              + sum_j(c_ij * E_j) + F_ext_i(t)
 
 where:
-    S_i(t)       : source/input rate for subsystem i [energy/yr]
-    lambda_i     : linear dissipation rate [1/yr]
-    gamma_i      : nonlinear dissipation coefficient [1/(energy*yr)]
-    c_ij         : cross-system coupling coefficient [1/yr]
+    S_i(t)       : external source/input rate [energy/yr]
+    alpha_i      : retention rate — rate at which the system reinforces
+                   its own energy state [1/yr].  Physical mechanisms:
+                   greenhouse trapping (atm), magnetic confinement (mag),
+                   ocean thermal inertia (oceanic), coronal storage (solar)
+    lambda_i     : radiative/dissipative loss rate [1/yr]
+    gamma_i      : nonlinear dissipation [1/(energy*yr)] — dominates at
+                   high E, ensuring bounded solutions (2nd law: entropy
+                   production increases with energy, enhanced radiation)
+    c_ij         : cross-system coupling [1/yr]
     F_ext_i(t)   : external forcing (meteors, launches, volcanic) [energy/yr]
 
-Retention is modeled through small lambda (slow decay = high retention),
-not through a separate growth term.
+Energy conservation (1st law): energy entering the system either stays
+(retention) or leaves (dissipation).  The net rate (alpha - lambda) controls
+whether the system accumulates or loses energy.  CEED's thesis: when
+alpha_i >= lambda_i across multiple coupled subsystems, energy accumulates
+until nonlinear dissipation (gamma * E^2) restores balance — or the system
+transitions to a new state.
+
+2nd law constraint: gamma_i > 0 guarantees that dissipation always wins
+at sufficiently high E (entropy production scales superlinearly with
+energy flux), preventing unphysical unbounded growth.
 """
 
 import numpy as np
@@ -58,8 +78,23 @@ class SystemParameters:
         'oceanic': 110.0,     # proxy: ocean heat content index
     })
 
+    # Retention rates [1/yr]
+    # Rate at which each subsystem reinforces its own energy state.
+    # Physical basis:
+    #   solar       — coronal magnetic confinement of plasma
+    #   magnetic    — ring current self-sustaining via gradient drift
+    #   atmospheric — greenhouse trapping of outgoing longwave radiation
+    #   oceanic     — thermal inertia of deep ocean heat storage
+    alpha_retention: dict = field(default_factory=lambda: {
+        'solar': 0.06,
+        'magnetic': 0.025,
+        'atmospheric': 0.09,
+        'oceanic': 0.015,
+    })
+
     # Linear dissipation rates [1/yr]
-    # Higher lambda => faster energy loss (lower retention)
+    # Radiative losses, particle precipitation, heat flux to space.
+    # Net growth when alpha > lambda; net decay when alpha < lambda.
     lambda_dissipation: dict = field(default_factory=lambda: {
         'solar': 0.05,
         'magnetic': 0.02,
@@ -68,12 +103,13 @@ class SystemParameters:
     })
 
     # Nonlinear (quadratic) dissipation [1/(energy*yr)]
-    # Prevents unbounded growth at high energy
+    # Enforces 2nd-law bound: at high E, entropy production and
+    # radiative losses scale superlinearly, preventing runaway.
     gamma_nonlinear: dict = field(default_factory=lambda: {
-        'solar': 0.001,
-        'magnetic': 0.001,
-        'atmospheric': 0.001,
-        'oceanic': 0.001,
+        'solar': 0.0002,
+        'magnetic': 0.0002,
+        'atmospheric': 0.0002,
+        'oceanic': 0.0002,
     })
 
     # Cross-system coupling matrix c_ij [1/yr]
@@ -109,10 +145,10 @@ class ConvergencePredictor:
     def source_rate(self, system: str, t: float) -> float:
         """External source/input rate S_i(t) [energy/yr].
 
-        Solar: 11-year cycle modulation.
-        Magnetic: secular decline (field weakening trend).
-        Atmospheric: slow anthropogenic trend.
-        Oceanic: slow anthropogenic trend.
+        Solar: 11-year sunspot cycle modulation (F10.7 proxy).
+        Magnetic: secular geomagnetic field weakening trend.
+        Atmospheric: anthropogenic greenhouse gas trend.
+        Oceanic: anthropogenic ocean heat uptake trend.
         """
         if system == 'solar':
             return 5.0 * (1.0 + 0.3 * np.cos(2 * np.pi * t / 11.0))
@@ -126,19 +162,25 @@ class ConvergencePredictor:
     def energy_derivative(self, E: list, t: float) -> list:
         """RHS of the coupled ODE system.
 
-        dE_i/dt = S_i(t) - lambda_i*E_i - gamma_i*E_i^2 + sum_j c_ij*E_j
+        dE_i/dt = S_i(t) + (alpha_i - lambda_i)*E_i - gamma_i*E_i^2
+                  + sum_j c_ij*E_j
+
+        The (alpha - lambda) term is the net retention: positive means the
+        system accumulates energy faster than it radiates.  The gamma*E^2
+        term ensures dissipation always wins at high E (2nd law).
         """
         p = self.params
         dE_dt = []
 
         for i, sys_i in enumerate(SYSTEMS):
             E_i = E[i]
+            alpha = p.alpha_retention[sys_i]
             lam = p.lambda_dissipation[sys_i]
             gam = p.gamma_nonlinear[sys_i]
 
             source = self.source_rate(sys_i, t)
-            linear_loss = lam * E_i
-            nonlinear_loss = gam * E_i ** 2
+            net_retention = (alpha - lam) * E_i   # >0 when accumulating
+            nonlinear_loss = gam * E_i ** 2        # always positive, grows with E
 
             # Cross-system coupling: sum over j != i
             coupling_gain = 0.0
@@ -147,7 +189,7 @@ class ConvergencePredictor:
                     c_ij = p.coupling.get((sys_i, sys_j), 0.0)
                     coupling_gain += c_ij * E[j]
 
-            dE_dt.append(source - linear_loss - nonlinear_loss + coupling_gain)
+            dE_dt.append(source + net_retention - nonlinear_loss + coupling_gain)
 
         return dE_dt
 
