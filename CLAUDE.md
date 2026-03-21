@@ -6,11 +6,16 @@ Guidelines for AI assistants working on the CEED codebase.
 
 CEED (Cascading Energetic Event Disruption) is a Python simulation framework
 for modelling cross-domain energy convergence across Earth-space systems.
-It uses coupled ODEs to track energy accumulation in solar, magnetic,
-atmospheric, and oceanic subsystems and evaluates whether positive feedbacks
-can drive the system through phase transitions toward nonlinear amplification.
 
-All parameters are anchored to IPCC AR6 and peer-reviewed literature.
+**What CEED tests that other models don't**: existing Earth System Models
+(CESM, GFDL, UKESM) treat solar, magnetic, atmospheric, and oceanic systems
+largely in isolation.  CEED's thesis is that cross-domain energy transfer
+pathways can amplify anthropogenic forcing beyond single-system predictions.
+The model's value is in the **coupling matrix**, not in beating full ESMs at
+single-system accuracy.
+
+Parameters are calibrated against 2010-2024 observations via the hindcast
+framework.  See `Docs/calibration-guide.md` for tuning workflow.
 
 ## Repository Structure
 
@@ -120,13 +125,17 @@ Validates model against historical observations using:
 
 Run: `python -m simulation.hindcast --compare`
 
-Current hindcast scores (known calibration gaps documented):
-- **Oceanic with anthro: R²=0.60 (B)** — trend and magnitude correct
-- **Solar: F** — internal dynamics damp out 11-year cycle
-- **Magnetic: F** — needs stronger solar-driven component
-- **Atmospheric with anthro: F** — A_0 sensitivity too high
+Current hindcast scores (anthropogenic model):
 
-These scores are the starting point for calibration, not the end state.
+| System      | R²    | Grade | Status              |
+|-------------|-------|-------|---------------------|
+| Atmospheric | +0.51 | C     | Calibrated          |
+| Oceanic     | +0.69 | B     | Calibrated          |
+| Magnetic    | -0.03 | F     | Neutral (near zero) |
+| Solar       | -0.44 | F     | Needs cycle work    |
+| **Mean**    | **+0.18** |   | **First positive**  |
+
+See `Docs/calibration-guide.md` for tuning priorities and workflow.
 
 ### Earth System Model (`simulation/minimum_esm_code.py`)
 

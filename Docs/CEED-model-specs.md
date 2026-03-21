@@ -68,28 +68,28 @@ S_atmospheric(t) = 3.0 * (1 + 0.05*t)                    [anthropogenic trend]
 S_oceanic(t)     = 1.0 * (1 + 0.02*t)                    [anthropogenic trend]
 ```
 
-### 1.4 Retention and Dissipation Parameters
+### 1.4 Retention, Dissipation, and Source Parameters
 
-| Subsystem   | alpha_i | lambda_i | alpha-lambda | gamma_i |
-|-------------|---------|----------|--------------|---------|
-| Solar       | 0.06    | 0.05     | +0.01        | 0.0002  |
-| Magnetic    | 0.025   | 0.02     | +0.005       | 0.0002  |
-| Atmospheric | 0.09    | 0.08     | +0.01        | 0.0002  |
-| Oceanic     | 0.015   | 0.01     | +0.005       | 0.0002  |
+| Subsystem   | alpha   | lambda  | a-l     | gamma  | S_eq   | 1/λ     |
+|-------------|---------|---------|---------|--------|--------|---------|
+| Solar       | 0.010   | 0.300   | -0.290  | 0.0005 | 68.4   | ~3 yr   |
+| Magnetic    | 0.005   | 0.150   | -0.145  | 0.0005 | 17.7   | ~7 yr   |
+| Atmospheric | 0.082   | 0.080   | +0.002  | 0.0002 | 2.55   | ~12 yr  |
+| Oceanic     | 0.012   | 0.010   | +0.002  | 0.0002 | 2.20   | ~100 yr |
 
-All subsystems have `alpha > lambda` (net positive retention), meaning they
-accumulate energy at low-to-moderate levels.  This reflects the current
-physical state: Earth is gaining ~1 W/m² net energy.
+**Design principle**: each subsystem's timescale (1/λ) reflects its physical
+storage mechanism:
+- **Solar and magnetic**: fast-response observables (F10.7, Kp track current
+  activity).  High λ means the source function dominates — the 11-year cycle
+  propagates directly into the energy index.
+- **Atmospheric and oceanic**: slow-response systems with thermal memory.
+  Low λ means stored energy persists.  Net retention (α > λ) allows
+  slow anthropogenic accumulation.
 
-Physical basis for retention (alpha):
-- **Solar**: coronal magnetic confinement of plasma
-- **Magnetic**: ring current self-sustaining via gradient-curvature drift
-- **Atmospheric**: greenhouse trapping of outgoing longwave radiation
-- **Oceanic**: thermal inertia of deep ocean heat storage
+Source rates are calibrated to maintain pre-industrial equilibrium:
+`S = (λ - α) * E_eq + γ * E_eq²`.  If you change α, λ, or γ, recalculate S.
 
-The quadratic term `gamma_i * E_i^2` represents enhanced dissipation at
-high energy (Stefan-Boltzmann T^4 scaling, enhanced convection, increased
-particle precipitation).  It guarantees bounded solutions.
+The quadratic term `gamma_i * E_i^2` guarantees bounded solutions (2nd law).
 
 ### 1.5 Cross-System Coupling
 
@@ -384,18 +384,17 @@ NRMSE, Bias, and letter grades (A-F).
 
 Run: `python -m simulation.hindcast --compare`
 
-### Current scores (as of initial calibration):
+### Current scores (calibration v2):
 
-| System      | Baseline R² | Anthro R² | Grade | Issue                     |
-|-------------|-------------|-----------|-------|---------------------------|
-| Solar       | -0.19       | -0.19     | F     | Cycle damped by dynamics  |
-| Magnetic    | -0.30       | -0.32     | F     | Needs solar-driven source |
-| Atmospheric | -2.59       | -96.6     | F     | A_0 sensitivity too high  |
-| Oceanic     | -3.20       | +0.60     | B     | Trend correct             |
+| System      | Baseline R² | Anthro R² | Grade | Status              |
+|-------------|-------------|-----------|-------|---------------------|
+| Solar       | -0.45       | -0.44     | F     | Cycle needs work    |
+| Magnetic    | -0.02       | -0.03     | F     | Near zero (neutral) |
+| Atmospheric | -0.22       | +0.51     | C     | Calibrated          |
+| Oceanic     | -1.45       | +0.69     | B     | Calibrated          |
+| **Mean**    | -0.53       | **+0.18** |       | **First positive**  |
 
-These scores document the model's current state and serve as the baseline
-for future calibration.  The hindcast framework is designed to be used
-iteratively by any AI or researcher.
+See `Docs/calibration-guide.md` for parameter hierarchy and tuning workflow.
 
 ---
 
