@@ -216,8 +216,15 @@ Fold at |F| = 2/(3 sqrt 3) = 0.3849, x = +/-1/sqrt(3).
 - **Commitment lag**: x crosses while h has moved 3.2% of its eventual change
 
 The commitment lag is the point. `tau_slow >> tau_fast` means the system is
-decided long before it looks decided — the ice sheet case, where the shelf
-goes in months and the sheet responds over centuries.
+decided long before it looks decided.
+
+The shelf/sheet pair maps onto the two variables directly: `x` is ice SHELF
+integrity (floating, disintegrates in weeks to months), `h` is grounded ice
+SHEET mass (responds over centuries). They couple because the shelf buttresses
+the sheet. Shelf loss raises sea level by almost nothing directly — it is
+already floating — and matters because of what it stops holding back. The
+visible event is fast and nearly harmless; the consequence it commits to is
+slow and large.
 
 Noise is pre-generated and passed in, never drawn inside the derivative.
 

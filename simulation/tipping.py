@@ -34,9 +34,25 @@ the three properties the convergence model lacks.
     dx/dt = (x - x^3 + F(t) + noise) / tau_fast     internal state
     dh/dt = (x - h) / tau_slow                       observable response
 
-`x` is the fast internal state — think grounding-line position or a thermal
-state. `h` is the slow observable — think ice mass. The cubic gives two stable
-branches separated by a fold; `tau_slow >> tau_fast` separates the timescales.
+The cubic gives two stable branches separated by a fold; `tau_slow >>
+tau_fast` separates the timescales.
+
+The clearest physical reading is the shelf/sheet pair, which maps onto the
+two variables exactly:
+
+    x  fast   ice SHELF integrity / buttressing.  Floating, can disintegrate
+              in weeks to months.  Larsen B lost ~3,250 km^2 in five weeks;
+              the Thwaites eastern shelf is expected to go imminently.
+    h  slow   grounded ice SHEET mass.  Responds over centuries to millennia.
+
+They are coupled because the shelf buttresses the sheet: losing the shelf
+removes the restraint, so a fast change in `x` commits `h` to a slow drawdown
+that continues long after the trigger is gone. Shelf loss raises sea level by
+almost nothing directly — it is already floating. It matters because of what
+it stops holding back.
+
+That is the whole reason for the timescale split. The event you can see is
+fast and nearly harmless; the consequence it commits you to is slow and large.
 
 THE POINT OF THE SPLIT
 ----------------------
