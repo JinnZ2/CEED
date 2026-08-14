@@ -64,13 +64,15 @@ CEED/
 ├── simulation/
 │   ├── convergence_model.py               Energy evolution engine
 │   ├── convergence_model_extended.py      + external events and unknown sinks
-│   └── minimum_esm_code.py                2-layer energy balance model (IPCC-calibrated)
+│   ├── minimum_esm_code.py                2-layer energy balance model (IPCC-calibrated)
+│   └── mhd_spatial_model.py               MHD injection, torque, dynamo, 4-zone coupling
 ├── experiments/
 │   └── run_mc.py                          Monte Carlo uncertainty quantification
 ├── Data/
 │   └── inputs.py                          Input layer (mock data, pending real APIs)
 ├── Docs/
-│   └── CEED-model-specs.md                Foundational equations and design decisions
+│   ├── CEED-model-specs.md                Foundational equations and design decisions
+│   └── numerical-audit.md                 Parameter, threshold, and units audit
 ├── Tests/                                 pytest suite
 └── LICENSE
 ```
@@ -99,7 +101,10 @@ python simulation/minimum_esm_code.py --horizon 10 --plot
 # 5. Quantify uncertainty across parameter ranges
 python experiments/run_mc.py --n 200
 
-# 6. Optional: Streamlit GUI
+# 6. MHD injection, hemispheric torque, dynamo, and zone coupling
+python simulation/mhd_spatial_model.py
+
+# 7. Optional: Streamlit GUI
 streamlit run dashboard_starter.py
 ```
 
@@ -108,6 +113,11 @@ Then modify `Data/inputs.py` to reflect real-world data, read
 “Wait… are we screwed?”
 
 **Run the tests** with `pytest` from the repository root.
+
+**Before trusting any number this produces**, read
+[the numerical audit](./Docs/numerical-audit.md). It documents which
+parameters are literature-backed and which thresholds are currently
+unreachable.
 
 ---
 
