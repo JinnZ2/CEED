@@ -26,13 +26,13 @@ This pattern appears in climate tipping points, financial crises, ecological col
 pip install -r requirements.txt
 
 # Run 3-year climate projection
-python climate_model/minimal_esm.py --horizon 3 --plot
+python simulation/minimum_esm_code.py --horizon 3 --plot
 
 # Run Monte Carlo uncertainty analysis
 python experiments/run_mc.py --n 200
 
-# Test policy scenarios
-python experiments/policy_scenarios.py
+# Run the multi-system convergence engine
+python simulation/convergence_model.py
 ```
 
 -----
@@ -41,18 +41,17 @@ python experiments/policy_scenarios.py
 
 ```
 CEED/
-├── climate_model/          # Scientifically grounded Earth system model
-│   ├── minimal_esm.py     # 2-layer energy balance model (IPCC-calibrated)
-│   ├── parameters.yaml    # Physical parameters and uncertainty ranges
-│   └── references.md      # Literature anchors (AR6, peer-reviewed)
-├── framework/             # Universal feedback architecture
-│   ├── universal_model.py # Abstract retention/dissipation framework
-│   └── core_principles.md # Theory documentation
-├── experiments/           # Simulation experiments
-│   ├── run_mc.py         # Monte Carlo uncertainty quantification
-│   └── policy_scenarios.py # Aerosol policy lever analysis
-├── docs/                  # Additional documentation
-└── README.md             # This file
+├── simulation/                        # Earth system and convergence models
+│   ├── minimum_esm_code.py            # 2-layer energy balance model (IPCC-calibrated)
+│   ├── convergence_model.py           # Multi-system energy accumulation engine
+│   └── convergence_model_extended.py  # + external events and unknown sinks
+├── CEED_universal_model.py            # Abstract retention/dissipation framework
+├── experiments/                       # Simulation experiments
+│   └── run_mc.py                      # Monte Carlo uncertainty quantification
+├── Data/inputs.py                     # Input layer (mock data, pending real APIs)
+├── Docs/                              # Additional documentation
+├── references.md                      # Literature anchors (AR6, peer-reviewed)
+└── README.md                          # This file
 ```
 
 -----
@@ -112,7 +111,7 @@ All parameters and feedback mechanisms are anchored to:
 - **Peer-reviewed literature** on feedback dynamics
 - **Observational constraints** where available
 
-See `climate_model/references.md` for detailed citations.
+See [`references.md`](../references.md) for detailed citations.
 
 -----
 
@@ -209,7 +208,7 @@ We build this to:
 
 ## License
 
-[To be determined - suggest MIT or CC BY 4.0]
+See [LICENSE](../LICENSE) in the repository root.
 
 -----
 

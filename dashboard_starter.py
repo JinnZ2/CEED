@@ -1,4 +1,4 @@
-# ui/dashboard_starter.py
+# dashboard_starter.py
 
 import streamlit as st
 import matplotlib.pyplot as plt

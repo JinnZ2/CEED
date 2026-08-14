@@ -1,4 +1,4 @@
-# data/inputs.py
+# Data/inputs.py
 
 """
 Mock Input Layer for CEED

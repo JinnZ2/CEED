@@ -1,8 +1,7 @@
 # CEED
 Cascading Energy Event Disruption Simulator 
 
-Red Team Report
-./red_team_report.md
+[Red Team Report](./red-team-report.md) — worst-case risk assessment
 
 [CEED Model Specification](./Docs/CEED-model-specs.md)
 
@@ -49,38 +48,66 @@ But the world doesn't always follow the assumptions.
 - Researchers, observers, and absolute nerds who see the interconnection  
 - Anyone who wants to ask “what could go wrong?” and mean it
 
+---
 
+##  Repository Structure
 
-ceed/
-
-├── README.md     You’re here
-
-├── red_team_report.md    worst-case risk assessment
-
+```
+CEED/
+├── README.md                              You’re here
+├── red-team-report.md                     Worst-case risk assessment
+├── references.md                          Literature anchors (AR6, peer-reviewed)
+├── To-be-added.md                         Roadmap: MHD, spatial zones, dynamo
+├── CEED_universal_model.py                Abstract retention/dissipation framework
+├── dashboard_starter.py                   Streamlit GUI (early alpha)
+├── conftest.py                            Puts the repo root on sys.path for tests
 ├── simulation/
+│   ├── convergence_model.py               Energy evolution engine
+│   ├── convergence_model_extended.py      + external events and unknown sinks
+│   └── minimum_esm_code.py                2-layer energy balance model (IPCC-calibrated)
+├── experiments/
+│   └── run_mc.py                          Monte Carlo uncertainty quantification
+├── Data/
+│   └── inputs.py                          Input layer (mock data, pending real APIs)
+├── Docs/
+│   └── CEED-model-specs.md                Foundational equations and design decisions
+├── Tests/                                 pytest suite
+└── LICENSE
+```
 
-│   └── convergence_model.py energy evolution engine
-
-├── data/
-
-│   └── inputs.py  real data sources
-
-├── ui/
-
-│   └── dashboard_starter.py Streamlit GUI (early alpha)
-
-└── LICENSE.md  
-
+Domain notes live alongside the code: `Space-debris.md`,
+`ionospheric-chaos-index.md`, `planetary-resonance-module.md`,
+`solar-angular-momentum.md`.
 
 ---
 
 ##  Quick Start
 
-1. Clone the repo  
-2. Run `convergence_model.py` to simulate the next 3 years of planetary energy states  
-3. Modify inputs in `inputs.py` to reflect real-world data  
-4. Read `red_team_report.md` and ask yourself: “Wait… are we screwed?”  
-5. Optional: Load `dashboard_starter.py` in Streamlit for GUI visualizations
+```bash
+# 1. Clone the repo, then install dependencies
+pip install -r requirements.txt
+
+# 2. Simulate the next 3 years of planetary energy states
+python simulation/convergence_model.py
+
+# 3. Same, but with meteors, satellite launches, and uncharacterized sinks
+python simulation/convergence_model_extended.py
+
+# 4. Run the IPCC-calibrated climate model
+python simulation/minimum_esm_code.py --horizon 10 --plot
+
+# 5. Quantify uncertainty across parameter ranges
+python experiments/run_mc.py --n 200
+
+# 6. Optional: Streamlit GUI
+streamlit run dashboard_starter.py
+```
+
+Then modify `Data/inputs.py` to reflect real-world data, read
+[the red team report](./red-team-report.md), and ask yourself:
+“Wait… are we screwed?”
+
+**Run the tests** with `pytest` from the repository root.
 
 ---
 
