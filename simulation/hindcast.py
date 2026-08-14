@@ -129,6 +129,8 @@ def run_hindcast(params: Optional[SystemParameters] = None,
                  systems: Optional[List[str]] = None,
                  start_year: int = 2010,
                  end_year: int = 2024,
+                 score_from: Optional[int] = None,
+                 score_to: Optional[int] = None,
                  ) -> Dict[str, HindcastScore]:
     """Run hindcast validation for specified subsystems.
 
@@ -136,11 +138,19 @@ def run_hindcast(params: Optional[SystemParameters] = None,
     then integrated forward.  Predictions are compared to observations at
     each subsequent year.
 
+    score_from/score_to restrict SCORING to a sub-window without changing the
+    integration, which is what makes a held-out test possible: the trajectory
+    still starts at start_year and receives no observations after it, so
+    scoring a later window is a genuine free-running forecast rather than a
+    re-initialised one. See simulation/validation.py.
+
     Args:
         params: Model parameters (default: SystemParameters with anthropogenic).
         systems: List of subsystem names to validate. Default: all.
-        start_year: First year of hindcast period.
-        end_year: Last year of hindcast period.
+        start_year: First year of hindcast period (model initialised here).
+        end_year: Last year integrated.
+        score_from: First year to score. Default start_year + 1.
+        score_to: Last year to score. Default end_year.
 
     Returns:
         Dict mapping system name to HindcastScore.
@@ -198,8 +208,9 @@ def run_hindcast(params: Optional[SystemParameters] = None,
     scores = {}
     for sys_name in systems:
         obs_data = ALL_OBSERVED[sys_name]
-        obs_years = sorted([yr for yr in obs_data
-                            if start_year < yr <= end_year])
+        lo = start_year + 1 if score_from is None else max(score_from, start_year + 1)
+        hi = end_year if score_to is None else min(score_to, end_year)
+        obs_years = sorted([yr for yr in obs_data if lo <= yr <= hi])
         if len(obs_years) < 2:
             continue
 

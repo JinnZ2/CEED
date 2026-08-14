@@ -27,12 +27,18 @@ Everything here has been through it at least once.
 | `CEED_universal_model_v0.py` | Feedback as a state multiplier; retention collapse | E5 | superseded |
 | `minimum_esm_code_v0.py` | Retention collapse as runaway safeguard; ECS as forcing | E3, E4 | superseded |
 | `run_mc_v0.py` | Same ECS-as-forcing error, sampled | E4 | superseded |
+| *(no file)* | "Mean R² is positive" as a claim of skill | E8 | claim retracted |
 
-All five still execute. Run them to see the falsified behaviour directly:
+All five files still execute. Run them to see the falsified behaviour
+directly:
 
 ```bash
 cd legacy && python convergence_model_v0.py
 ```
+
+E8 has no file because what failed was a *claim about the model*, not a
+version of it. It is recorded here anyway — a retracted claim is as much a
+result as a retired implementation.
 
 ## What is deliberately NOT in here
 
@@ -261,6 +267,64 @@ model's own linearisation — **not fitted to the hindcast**, so the hindcast
 remains an independent check.
 
 **Rerun.** **R² = +0.359, grade C.**
+
+---
+
+## E8 — "Mean R² is positive" as a claim of skill
+
+No superseded *file* for this one. What was falsified is a **claim about the
+model**, made repeatedly in commit messages and docs, including by this
+project's own audit.
+
+**Hypothesis.** The model has predictive skill, evidenced by a positive mean
+R² against 2010–2024 observations — first +0.183, then +0.312 after the E7
+correction.
+
+**Test.** Split the record. Train 2010–2019, test 2020–2024, one continuous
+trajectory with no re-initialisation at 2020, so the test years are a
+free-running five-year forecast. Re-derive the solar amplitude from the train
+window alone, since the full-record derivation reads the 2024 F10.7 maximum
+and that sits in the test window.
+
+**Result — falsified.** Shipped parameters, held out:
+
+| System | train R² | test R² | gap |
+|---|---|---|---|
+| solar | −0.020 | **+0.555** | −0.575 |
+| magnetic | −1.193 | +0.057 | −1.249 |
+| atmospheric | +0.316 | +0.042 | +0.274 |
+| oceanic | **+0.773** | **−2.705** | **+3.478** |
+| **mean** | −0.031 | **−0.513** | +0.482 |
+
+Mean test R² of **−0.513**: out of sample the model is beaten by a flat line
+through the test window's own mean. The reported +0.312 was measuring the
+optimiser, not the physics.
+
+**Oceanic is the specific failure.** The subsystem that looked strongest
+in-sample (+0.631, grade B) fails hardest out of sample, a gap of 3.478. It
+was fitting a monotonic trend it cannot extrapolate. Refitting without
+leakage halves the damage (−0.469) but does not remove it.
+
+**Solar is the counterexample worth keeping.** It is the only subsystem with a
+*negative* gap under both parameter sets — better out of sample than in. Its
+constants came from the model's own linearisation (E7), not from fitting.
+Derived constants travelled; fitted ones did not. That is the most useful
+thing this test produced.
+
+**Edited claim.** Full-record scores are labelled in-sample everywhere they
+appear, and the held-out table is now the one quoted as skill. The
+calibration guide's old rule — *"commit if scores improved"* — is itself
+falsified by this result and replaced: commit only if the **test** score
+improved, or if the change is derived rather than dialled.
+
+**Unknown surfaced.** The test window is 5 years against an 11-year cycle, so
+it cannot test cycle physics at all — only drift, bias, and extrapolation. A
+real test of the coupling matrix needs either a longer record or
+cross-system lag correlations, which nothing here scores yet.
+
+Reproduce with `python -m simulation.validation`. The separation is verified,
+not assumed: `test_calibration_cannot_see_the_test_window` poisons every
+test-window observation and asserts the fitted parameters do not move.
 
 ---
 

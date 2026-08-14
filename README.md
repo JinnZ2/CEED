@@ -67,7 +67,8 @@ CEED/
 │   ├── minimum_esm_code.py                Energy balance model (IPCC AR6-calibrated)
 │   ├── mhd_spatial_model.py               MHD injection, torque, dynamo, 4-zone coupling
 │   ├── unit_bridge.py                     Energy indices <-> physical observables
-│   └── hindcast.py                        Validation against 2010-2024 observations
+│   ├── hindcast.py                        Validation against 2010-2024 observations
+│   └── validation.py                      Held-out train/test split
 ├── experiments/
 │   └── run_mc.py                          Monte Carlo uncertainty quantification
 ├── Data/
@@ -99,16 +100,19 @@ python simulation/convergence_model.py
 # 3. Score the model against 2010-2024 observations
 python -m simulation.hindcast --compare
 
-# 4. Run the IPCC-calibrated climate model
+# 4. Score it out-of-sample: fit 2010-2019, test 2020-2024
+python -m simulation.validation
+
+# 5. Run the IPCC-calibrated climate model
 python simulation/minimum_esm_code.py --horizon 10 --plot
 
-# 5. Quantify uncertainty across parameter ranges
+# 6. Quantify uncertainty across parameter ranges
 python experiments/run_mc.py --n 200
 
-# 6. MHD injection, hemispheric torque, dynamo, and zone coupling
+# 7. MHD injection, hemispheric torque, dynamo, and zone coupling
 python simulation/mhd_spatial_model.py
 
-# 7. Optional: Streamlit GUI
+# 8. Optional: Streamlit GUI
 streamlit run dashboard_starter.py
 ```
 

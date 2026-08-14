@@ -29,7 +29,8 @@ CEED/
 │   ├── minimum_esm_code.py          # 2-variable Earth System Model (T, CO2)
 │   ├── mhd_spatial_model.py         # MHD injection, torque, dynamo, zone coupling
 │   ├── unit_bridge.py               # Energy indices <-> physical observables
-│   └── hindcast.py                  # Validation against 2010-2024 observations
+│   ├── hindcast.py                  # Validation against 2010-2024 observations
+│   └── validation.py                # Held-out train/test split
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
 │   └── run_mc.py                    # Monte Carlo uncertainty analysis
@@ -56,6 +57,7 @@ CEED/
 | Run ESM | `python simulation/minimum_esm_code.py --plot` |
 | Run Monte Carlo | `python experiments/run_mc.py --n 200 --horizon 10` |
 | Run hindcast | `python -m simulation.hindcast --compare` |
+| Held-out validation | `python -m simulation.validation` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -141,14 +143,36 @@ Current hindcast scores (anthropogenic model, 2010-2024):
 | Magnetic    | -0.21 | F     | Open — cannot track the cycle           |
 | **Mean**    | **+0.31** |   | Read the rows, not the average          |
 
-Two cautions when quoting these:
+**These are in-sample figures. Do not quote them as predictive skill.**
 
-1. **Mean R² is a weak summary** across four incommensurable subsystems. One
-   subsystem still scores worse than a flat line.
-2. **Atmospheric and oceanic are in-sample.** `A_0` and `atm_fraction` were
-   tuned against this same window, so those scores are not out-of-sample
-   skill. Solar is not in-sample — its constants come from the model's own
-   linearisation. A genuine test needs a held-out period.
+### Held-out validation (the number that matters)
+
+`python -m simulation.validation` splits the record: train 2010-2019, test
+2020-2024, one continuous trajectory, no re-initialisation at 2020.
+
+| System      | train R² | test R² | gap    |
+|-------------|----------|---------|--------|
+| solar       | -0.020   | **+0.555** | -0.575 |
+| magnetic    | -1.193   | +0.057  | -1.249 |
+| atmospheric | +0.316   | +0.042  | +0.274 |
+| oceanic     | **+0.773** | **-2.705** | **+3.478** |
+| **Mean**    | -0.031   | **-0.513** | +0.482 |
+
+Out of sample the shipped parameters are **beaten by a flat line** (mean test
+R² -0.513). Oceanic — the best-looking subsystem in-sample — is the worst
+offender, +0.773 train to -2.705 test.
+
+Solar is the one that generalises (test +0.555), and it is the one whose
+constants were **derived** from the model's linearisation rather than fitted.
+That is the lesson: derived constants travelled, fitted ones did not.
+
+Caveat: the test window is 5 years against an 11-year solar cycle, so this
+tests drift and extrapolation, not cycle physics.
+
+Two cautions when quoting any of these:
+
+1. **Mean R² is a weak summary** across four incommensurable subsystems.
+2. **Never quote the full-record scores as skill.** Use the held-out table.
 
 Magnetic is structurally unable to oscillate: its source is constant and the
 solar coupling carries only ~2% of its input. See finding 18 in

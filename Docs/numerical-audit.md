@@ -34,6 +34,7 @@ them; the rest are open. Reproduce any figure with `pytest` and the module
 | 16 | Ap→Kp conversion did not reproduce its own table | `unit_bridge.py` | Medium | **RESOLVED** |
 | 17 | `pytest` collected zero tests | `Tests/` | High | **RESOLVED** |
 | 18 | Magnetic subsystem cannot track the solar cycle | `convergence_model.py` | Medium | **Open** |
+| 19 | Reported skill was in-sample; held-out test is far worse | `hindcast.py` | **Critical** | **Open** |
 
 ---
 
@@ -187,14 +188,69 @@ stronger solar→magnetic coupling, justified against data rather than fitted.
 It was left alone here deliberately: tuning it against the same 2010–2024
 window used to score it would not be evidence of anything.
 
-### Note on calibration circularity
+### 19 — The reported skill was in-sample, and it does not hold up
 
-Solar's improvement (13) comes from constants derived analytically from the
-model's own linearisation, not fitted to the hindcast — the hindcast is an
-independent check on that derivation. The anthropogenic parameters (`A_0`,
-`atm_fraction`) were tuned against this same 2010–2024 window, so atmospheric
-and oceanic scores are in-sample and should not be read as out-of-sample
-skill. A genuine test needs a held-out period.
+Every score this project has quoted was measured on the window the parameters
+were tuned against. `simulation/validation.py` splits the record — train
+2010–2019, test 2020–2024 — and the result changes the story.
+
+The split is enforced two ways. The model is initialised at 2010 and
+integrated straight through 2024 without re-initialisation, so the test years
+are a free-running five-year forecast rather than a warm start. And the solar
+modulation, which is *derived* from the observed F10.7 amplitude, is
+re-derived from the train window alone — over the full record that amplitude
+includes the 2024 maximum of 180 sfu, which sits in the test window, so the
+shipped constant leaks (0.485 full-record vs **0.337** train-only).
+
+**Shipped parameters, scored out-of-sample:**
+
+| System | train R² (2011–2019) | test R² (2020–2024) | gap |
+|---|---|---|---|
+| solar | −0.020 | **+0.555** | −0.575 |
+| magnetic | −1.193 | +0.057 | −1.249 |
+| atmospheric | +0.316 | +0.042 | +0.274 |
+| oceanic | **+0.773** | **−2.705** | **+3.478** |
+| **mean** | −0.031 | **−0.513** | +0.482 |
+
+**Refitted on 2010–2019 only, no leakage:**
+
+| System | train R² | test R² | gap |
+|---|---|---|---|
+| solar | +0.197 | +0.493 | −0.296 |
+| magnetic | −1.191 | +0.060 | −1.250 |
+| atmospheric | +0.545 | +0.137 | +0.408 |
+| oceanic | +0.915 | **−0.469** | +1.384 |
+| **mean** | +0.117 | **+0.055** | +0.061 |
+
+Three things follow.
+
+**The +0.312 full-record mean is not a skill estimate.** Held out, the shipped
+parameters score a mean test R² of **−0.513** — worse, on average, than a flat
+line through the test window's own mean.
+
+**Oceanic is the overfit.** It is the subsystem that looked strongest
+(+0.631, grade B on the full record) and it fails hardest out of sample:
++0.773 → **−2.705**, a gap of 3.478. Refitting without leakage roughly halves
+the damage (−0.469) but does not remove it. The ocean term is fitting a
+monotonic trend and cannot extrapolate it.
+
+**Solar generalises, which is the one real result.** Its correction came from
+the model's own linearisation rather than from fitting (finding 13), and it is
+the only subsystem with a *negative* gap under both parameter sets — test
++0.555 shipped, +0.493 refitted. Derived constants travelled; fitted ones did
+not.
+
+Caveat on the caveat: the test window is 5 years against an 11-year solar
+cycle, so this cannot test cycle physics. It tests drift, bias, and
+extrapolation. `test_calibration_cannot_see_the_test_window` poisons every
+test-window observation and asserts the fitted parameters do not move, so the
+separation is verified rather than assumed.
+
+Run it:
+
+```bash
+python -m simulation.validation
+```
 
 ---
 
@@ -226,3 +282,6 @@ skill. A genuine test needs a held-out period.
 
 A mean R² is a weak summary across four incommensurable subsystems — read the
 rows, not the average. One subsystem still scores worse than a flat line.
+
+**These are in-sample figures.** For out-of-sample skill see finding 19: held
+out on 2020–2024, the shipped parameters score a mean test R² of −0.513.
