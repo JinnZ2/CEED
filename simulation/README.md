@@ -43,8 +43,9 @@ python simulation/convergence_model.py
 CEED/
 ├── simulation/                        # Earth system and convergence models
 │   ├── minimum_esm_code.py            # 2-layer energy balance model (IPCC-calibrated)
-│   ├── convergence_model.py           # Multi-system energy accumulation engine
-│   └── convergence_model_extended.py  # + external events and unknown sinks
+│   ├── convergence_model.py           # Energy engine + anthropogenic forcing + events
+│   ├── unit_bridge.py                 # Energy indices <-> physical observables
+│   └── hindcast.py                    # Validation against 2010-2024 observations
 ├── CEED_universal_model.py            # Abstract retention/dissipation framework
 ├── experiments/                       # Simulation experiments
 │   └── run_mc.py                      # Monte Carlo uncertainty quantification

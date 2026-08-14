@@ -61,17 +61,20 @@ CEED/
 ├── CEED_universal_model.py                Abstract retention/dissipation framework
 ├── dashboard_starter.py                   Streamlit GUI (early alpha)
 ├── conftest.py                            Puts the repo root on sys.path for tests
+├── CLAUDE.md                              Codebase guide for AI/human contributors
 ├── simulation/
-│   ├── convergence_model.py               Energy evolution engine
-│   ├── convergence_model_extended.py      + external events and unknown sinks
-│   ├── minimum_esm_code.py                2-layer energy balance model (IPCC-calibrated)
-│   └── mhd_spatial_model.py               MHD injection, torque, dynamo, 4-zone coupling
+│   ├── convergence_model.py               Energy engine + anthropogenic forcing + events
+│   ├── minimum_esm_code.py                Energy balance model (IPCC AR6-calibrated)
+│   ├── mhd_spatial_model.py               MHD injection, torque, dynamo, 4-zone coupling
+│   ├── unit_bridge.py                     Energy indices <-> physical observables
+│   └── hindcast.py                        Validation against 2010-2024 observations
 ├── experiments/
 │   └── run_mc.py                          Monte Carlo uncertainty quantification
 ├── Data/
 │   └── inputs.py                          Input layer (mock data, pending real APIs)
 ├── Docs/
 │   ├── CEED-model-specs.md                Foundational equations and design decisions
+│   ├── calibration-guide.md               How to tune parameters against data
 │   └── numerical-audit.md                 Parameter, threshold, and units audit
 ├── Tests/                                 pytest suite
 └── LICENSE
@@ -92,8 +95,8 @@ pip install -r requirements.txt
 # 2. Simulate the next 3 years of planetary energy states
 python simulation/convergence_model.py
 
-# 3. Same, but with meteors, satellite launches, and uncharacterized sinks
-python simulation/convergence_model_extended.py
+# 3. Score the model against 2010-2024 observations
+python -m simulation.hindcast --compare
 
 # 4. Run the IPCC-calibrated climate model
 python simulation/minimum_esm_code.py --horizon 10 --plot
@@ -115,9 +118,9 @@ Then modify `Data/inputs.py` to reflect real-world data, read
 **Run the tests** with `pytest` from the repository root.
 
 **Before trusting any number this produces**, read
-[the numerical audit](./Docs/numerical-audit.md). It documents which
-parameters are literature-backed and which thresholds are currently
-unreachable.
+[the numerical audit](./Docs/numerical-audit.md). It records which parameters
+are literature-backed, what the hindcast actually scores, and which findings
+are still open — including one subsystem that scores worse than a flat line.
 
 ---
 

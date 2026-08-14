@@ -26,8 +26,10 @@ PY_FILES = sorted(
 IMPORTABLE_MODULES = [
     "CEED_universal_model",
     "simulation.convergence_model",
-    "simulation.convergence_model_extended",
     "simulation.minimum_esm_code",
+    "simulation.mhd_spatial_model",
+    "simulation.unit_bridge",
+    "simulation.hindcast",
     "experiments.run_mc",
     "Data.inputs",
 ]
