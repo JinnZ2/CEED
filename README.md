@@ -69,7 +69,8 @@ CEED/
 │   ├── unit_bridge.py                     Energy indices <-> physical observables
 │   ├── hindcast.py                        Validation against 2010-2024 observations
 │   ├── validation.py                      Held-out train/test split
-│   └── tipping.py                         Bistability, hysteresis, commitment lag
+│   ├── tipping.py                         Bistability, hysteresis, commitment lag
+│   └── cascade.py                         Coupled tipping elements (the C in CEED)
 ├── experiments/
 │   └── run_mc.py                          Monte Carlo uncertainty quantification
 ├── Data/
@@ -116,7 +117,10 @@ python simulation/mhd_spatial_model.py
 # 8. Tipping elements: hysteresis and the commitment lag
 python simulation/tipping.py
 
-# 9. Optional: Streamlit GUI
+# 9. Tipping cascades: one element tipping shifts another's threshold
+python simulation/cascade.py
+
+# 10. Optional: Streamlit GUI
 streamlit run dashboard_starter.py
 ```
 

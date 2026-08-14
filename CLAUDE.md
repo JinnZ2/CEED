@@ -31,7 +31,8 @@ CEED/
 │   ├── unit_bridge.py               # Energy indices <-> physical observables
 │   ├── hindcast.py                  # Validation against 2010-2024 observations
 │   ├── validation.py                # Held-out train/test split
-│   └── tipping.py                   # Bistability, hysteresis, commitment
+│   ├── tipping.py                   # Bistability, hysteresis, commitment
+│   └── cascade.py                   # Coupled tipping elements (cascades)
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
 │   └── run_mc.py                    # Monte Carlo uncertainty analysis
@@ -60,6 +61,7 @@ CEED/
 | Run hindcast | `python -m simulation.hindcast --compare` |
 | Held-out validation | `python -m simulation.validation` |
 | Tipping elements | `python simulation/tipping.py` |
+| Tipping cascades | `python simulation/cascade.py` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -230,6 +232,37 @@ Noise is pre-generated and passed in, never drawn inside the derivative.
 
 **Not integrated** into `ConvergencePredictor`. Wiring it in changes the
 model's character and is a maintainer decision.
+
+### Tipping Cascades (`simulation/cascade.py`)
+
+CEED is named for cascades and until now modelled none. N coupled elements:
+
+```
+dx_i/dt = (x_i - x_i^3 + F_i(t) + sum_j C_ij*phi_j + noise) / tau_fast_i
+dh_i/dt = (x_i - h_i) / tau_slow_i
+phi_j   = (h_j + 1)/2                    element j's tipped fraction
+```
+
+`C_ij` is j's effect on i. Positive destabilises, negative protects. The
+matrix is not symmetric — Thwaites->Ross is not Ross->Thwaites.
+
+**Coupling runs through the SLOW variable.** Influence only arrives as the
+source element actually responds, which makes cascades delay-dependent. That
+is the whole point: coupling through x would erase the effect that matters.
+Coupling uses `phi` rather than raw `h` so an intact network exerts no
+influence at t=0.
+
+Illustrative Thwaites/Ross configuration shows:
+
+- uncoupled, tipping Thwaites leaves Ross untouched
+- coupled at 0.55, Ross tips ~65 units later with no forcing of its own
+- domino threshold: 0.3853 minimum coupling for the cascade
+- Ross carries ~95% of the consequence and arrives last
+- a stabilising Ross->Thwaites link cannot help, because Ross needs
+  tau_slow=400 to respond and Thwaites tips at t=4. Sign is not enough;
+  a protective coupling slower than the collapse is worthless.
+
+Not calibrated. Do not read predictions out of it.
 
 ### Universal Framework (`CEED_universal_model.py`)
 

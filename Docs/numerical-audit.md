@@ -36,6 +36,7 @@ them; the rest are open. Reproduce any figure with `pytest` and the module
 | 18 | Magnetic subsystem cannot track the solar cycle | `convergence_model.py` | Medium | **Open** |
 | 19 | Reported skill was in-sample; held-out test is far worse | `hindcast.py` | **Critical** | **Open** |
 | 20 | Single attractor: cannot represent a state transition | `convergence_model.py` | **Critical** | **Open** (primitive built) |
+| 21 | Nothing modelled a cascade, in a project named for cascades | repo-wide | High | **Primitive built** |
 
 ---
 
@@ -225,6 +226,36 @@ response arrives centuries later.
 `ConvergencePredictor`, so the convergence model retains its single attractor.
 Integrating it is a modelling decision, not a bug fix, and is left to the
 maintainer.
+
+### 21 — Nothing in the repository modelled a cascade
+
+CEED stands for **C**ascading Energetic Event Disruption. Until
+`simulation/cascade.py` nothing in it modelled one. The convergence model has
+a coupling matrix, but with a single attractor (finding 20) there is nothing
+to cascade — coupled reservoirs exchange energy and settle, they do not tip
+each other.
+
+`cascade.py` couples N bistable elements, with influence arriving through
+each element's SLOW variable so cascades are delay-dependent. On the
+illustrative Thwaites/Ross pair: uncoupled, tipping Thwaites leaves Ross
+untouched; coupled at 0.55, Ross tips ~65 units later with no forcing of its
+own; the domino threshold is 0.3853.
+
+Two results worth carrying forward, both from the demo rather than asserted:
+
+- **Consequence and proximity are inversely ordered.** Thwaites sits closest
+  to its threshold and carries ~5% of the consequence. Ross is far from its
+  threshold and carries ~95%. The element that tips first is not the one that
+  matters.
+- **Sign is not enough — timing decides.** A stabilising Ross→Thwaites link of
+  any strength fails to protect Thwaites, because Ross needs `tau_slow = 400`
+  to respond while Thwaites tips at `t = 4`. A protective coupling slower than
+  the collapse it is meant to prevent is worthless. This is why the
+  interacting-tipping-element literature makes these relationships contingent
+  on rate and delay rather than sign alone.
+
+**Not calibrated.** The configuration is illustrative and chosen to expose the
+asymmetry. It is not wired into `ConvergencePredictor`.
 
 ### 18 — The magnetic subsystem cannot track the solar cycle
 

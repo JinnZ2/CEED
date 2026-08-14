@@ -29,6 +29,7 @@ Everything here has been through it at least once.
 | `run_mc_v0.py` | Same ECS-as-forcing error, sampled | E4 | superseded |
 | *(no file)* | "Mean R² is positive" as a claim of skill | E8 | claim retracted |
 | *(no file)* | "Add an ENSO oscillator" as the fix for E8 | E9 | wrong shape; replaced by `simulation/tipping.py` |
+| *(no file)* | Cascade coupling to raw `h` | E10 | inverted stabilising links; fixed in `cascade.py` |
 
 All five files still execute. Run them to see the falsified behaviour
 directly:
@@ -382,6 +383,45 @@ parameters (`A_0` 2.94 → 4.78), but `atm_fraction` hit the search boundary on
 ~5 scored points, so this repo's 15 annual values **cannot** establish the
 break. The sea-ice literature establishes it with 45 years of daily data; take
 it from there, not from here.
+
+---
+
+## E10 — Coupling a cascade to the raw slow variable
+
+A bug caught by its own test within minutes of being written, kept because
+the failure mode is subtle and would have looked like a modelling result.
+
+**Hypothesis.** In a network of coupled tipping elements, element j's
+influence on element i is `C_ij * h_j`, where h is j's slow observable.
+
+**Test.** Give the link a negative (stabilising) coefficient and check that
+the target does not tip.
+
+**Result — falsified.** The target tipped at t=2.0, almost immediately. `h`
+runs from −1 (intact) to +1 (gone), so at t=0 every element has h = −1 and a
+negative coefficient times −1 is a **positive** shove. Two bugs in one:
+
+1. An untouched network exerted influence before anything had tipped.
+2. Stabilising links were inverted — they *caused* the cascade they were
+   meant to prevent.
+
+The sign error is the dangerous one. It would not have crashed anything. It
+would have produced a plausible-looking figure showing that protective
+couplings accelerate collapse, which is the opposite of what the model says.
+
+**Revision.** Couple to the tipped fraction `phi_j = (h_j + 1) / 2`, which is
+0 when intact and 1 when fully tipped. Influence is now zero until something
+actually tips, and a negative coefficient is protective. Guarded by
+`test_untouched_network_exerts_no_influence` and
+`test_stabilising_link_is_protective_not_inverted`.
+
+**Unknown surfaced.** Fixing it made the original demo of a protective link
+stop working — a stabilising Ross→Thwaites coupling of *any* strength failed
+to save Thwaites. That is not a second bug. Ross needs `tau_slow = 400` to
+respond and Thwaites tips at `t = 4`, so the help arrives four hundred years
+late. The demo now shows that instead, because it is the more useful result:
+**a protective coupling slower than the collapse it prevents is worthless.**
+Sign alone does not determine whether an interaction helps.
 
 ---
 
