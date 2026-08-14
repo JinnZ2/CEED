@@ -32,7 +32,8 @@ CEED/
 │   ├── hindcast.py                  # Validation against 2010-2024 observations
 │   ├── validation.py                # Held-out train/test split
 │   ├── tipping.py                   # Bistability, hysteresis, commitment
-│   └── cascade.py                   # Coupled tipping elements (cascades)
+│   ├── cascade.py                   # Coupled tipping elements (cascades)
+│   └── forecast.py                  # Pre-registered prospective forecast
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
 │   └── run_mc.py                    # Monte Carlo uncertainty analysis
@@ -62,6 +63,7 @@ CEED/
 | Held-out validation | `python -m simulation.validation` |
 | Tipping elements | `python simulation/tipping.py` |
 | Tipping cascades | `python simulation/cascade.py` |
+| Prospective forecast | `python -m simulation.forecast` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -197,6 +199,32 @@ dCO2/dt = E_net(T) / alpha_CO2
 - C = 10.0 W yr/(m^2 K) — effective heat capacity
 - lambda_eff = F_2xCO2 / ECS — climate feedback parameter
 - F_2xCO2 = 3.7 W/m^2 — CO2 doubling forcing (Myhre et al. 1998)
+
+### Prospective Forecast (`simulation/forecast.py`)
+
+The only test here that cannot be gamed. Predictions issued before the outcome
+resolves, committed to git — the commit is the timestamp.
+
+Initialised from the last observation (2024), so everything is out of sample.
+Intervals are +/-2x the **held-out test RMSE**, never the in-sample fit.
+
+Key property: **it predicts its own failures.** Each prediction carries the
+subsystem's measured out-of-sample skill, so the forecast declares in advance
+which of its numbers it expects to be wrong — solar (+0.555) should verify,
+oceanic (-2.705) should not. If that pattern holds, `validation.py` is itself
+validated.
+
+Quantitative self-predictions, fixed at issue:
+
+- oceanic accumulates at +0.185 x10^22 J/yr against an observed +0.855,
+  under-predicting by ~4.6x, a ~4.0 shortfall by 2030
+- atmospheric warms at +0.020 K/yr against an observed +0.036, and runs COLD
+  because the model has no ENSO term while a very strong El Nino develops
+
+Full record: `Docs/forecast-2026.md` and `Docs/forecast-2026.json`.
+Resolve by adding observations to `unit_bridge.py` and re-running the
+hindcast from 2024. **Record the outcome in the falsification log either
+way** — a confirmed prediction is a result too.
 
 ### Tipping Elements (`simulation/tipping.py`)
 

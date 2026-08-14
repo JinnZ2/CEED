@@ -125,6 +125,50 @@ def compute_scores(system: str, years: np.ndarray,
     )
 
 
+def integrate_from(start_year: int,
+                   years: float,
+                   params: SystemParameters
+                   ) -> Tuple[np.ndarray, np.ndarray]:
+    """Initialise from observations at start_year and integrate forward.
+
+    Shared by the hindcast and the forecast so the two cannot drift apart:
+    a forecast that initialises differently from the hindcast that validated
+    it is not testing the same model.
+
+    The model's internal clock has t=0 at REFERENCE_YEAR, so the time-varying
+    terms are shifted by (start_year - REFERENCE_YEAR). `params` is mutated in
+    place to carry the new initial conditions.
+
+    Args:
+        start_year: Calendar year to initialise from. Must have observations.
+        years: How far forward to integrate.
+        params: Model parameters. E_initial is overwritten.
+
+    Returns:
+        t (years since start_year), solution of shape (N, 4).
+    """
+    for sys_name in SYSTEMS:
+        obs_data = ALL_OBSERVED[sys_name]
+        if start_year in obs_data:
+            params.E_initial[sys_name] = SCALES[sys_name].obs_to_energy(
+                obs_data[start_year])
+
+    predictor = ConvergencePredictor(params)
+    offset = start_year - REFERENCE_YEAR
+
+    original_source = predictor.source_rate
+    original_anthro = predictor.anthropogenic_source
+    original_alpha = predictor.effective_alpha
+
+    predictor.source_rate = lambda system, t: original_source(system, t + offset)
+    predictor.anthropogenic_source = (
+        lambda system, t: original_anthro(system, t + offset))
+    predictor.effective_alpha = (
+        lambda system, E, t: original_alpha(system, E, t + offset))
+
+    return predictor.predict_convergence(years=float(years))
+
+
 def run_hindcast(params: Optional[SystemParameters] = None,
                  systems: Optional[List[str]] = None,
                  start_year: int = 2010,
@@ -161,43 +205,7 @@ def run_hindcast(params: Optional[SystemParameters] = None,
     if params is None:
         params = SystemParameters(anthropogenic=AnthropogenicForcing())
 
-    # Set model initial conditions from observations at start_year
-    for sys_name in SYSTEMS:
-        obs_data = ALL_OBSERVED[sys_name]
-        if start_year in obs_data:
-            scale = SCALES[sys_name]
-            params.E_initial[sys_name] = scale.obs_to_energy(
-                obs_data[start_year])
-
-    # Integrate model
-    predictor = ConvergencePredictor(params)
-    years_forward = end_year - start_year
-    t_model_offset = start_year - REFERENCE_YEAR
-
-    # We need to run from t_model_offset to t_model_offset + years_forward
-    # but the model starts at t=0 internally.  Shift time reference.
-    # The source functions use t directly, so we need an offset.
-    original_source = predictor.source_rate
-    original_anthro = predictor.anthropogenic_source
-
-    def shifted_source(system, t):
-        return original_source(system, t + t_model_offset)
-
-    def shifted_anthro(system, t):
-        return original_anthro(system, t + t_model_offset)
-
-    predictor.source_rate = shifted_source
-    predictor.anthropogenic_source = shifted_anthro
-
-    # Also shift effective_alpha time reference
-    original_alpha = predictor.effective_alpha
-
-    def shifted_alpha(system, E, t):
-        return original_alpha(system, E, t + t_model_offset)
-
-    predictor.effective_alpha = shifted_alpha
-
-    t, solution = predictor.predict_convergence(years=float(years_forward))
+    t, solution = integrate_from(start_year, end_year - start_year, params)
 
     # Extract predictions at observation years.
     #
