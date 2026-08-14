@@ -39,6 +39,7 @@ CEED/
 │   ├── CEED-model-specs.md          # Full model specification
 │   ├── calibration-guide.md         # How to tune parameters against data
 │   └── numerical-audit.md           # Parameter/threshold/units audit, open findings
+├── legacy/                          # Superseded versions + falsification record
 ├── requirements.txt                 # Python dependencies
 ├── references.md                    # Scientific literature citations
 └── red-team-report.md               # Risk assessment report
@@ -130,15 +131,29 @@ Validates model against historical observations using:
 
 Run: `python -m simulation.hindcast --compare`
 
-Current hindcast scores (anthropogenic model):
+Current hindcast scores (anthropogenic model, 2010-2024):
 
-| System      | R²    | Grade | Status              |
-|-------------|-------|-------|---------------------|
-| Atmospheric | +0.51 | C     | Calibrated          |
-| Oceanic     | +0.69 | B     | Calibrated          |
-| Magnetic    | -0.03 | F     | Neutral (near zero) |
-| Solar       | -0.44 | F     | Needs cycle work    |
-| **Mean**    | **+0.18** |   | **First positive**  |
+| System      | R²    | Grade | Status                                  |
+|-------------|-------|-------|-----------------------------------------|
+| Oceanic     | +0.63 | B     | In-sample (tuned on this window)        |
+| Atmospheric | +0.47 | C     | In-sample (tuned on this window)        |
+| Solar       | +0.36 | C     | Fixed: phase lag derived, not fitted    |
+| Magnetic    | -0.21 | F     | Open — cannot track the cycle           |
+| **Mean**    | **+0.31** |   | Read the rows, not the average          |
+
+Two cautions when quoting these:
+
+1. **Mean R² is a weak summary** across four incommensurable subsystems. One
+   subsystem still scores worse than a flat line.
+2. **Atmospheric and oceanic are in-sample.** `A_0` and `atm_fraction` were
+   tuned against this same window, so those scores are not out-of-sample
+   skill. Solar is not in-sample — its constants come from the model's own
+   linearisation. A genuine test needs a held-out period.
+
+Magnetic is structurally unable to oscillate: its source is constant and the
+solar coupling carries only ~2% of its input. See finding 18 in
+`Docs/numerical-audit.md`. It is deliberately untuned — fitting it against the
+window used to score it would produce a better number and no new knowledge.
 
 See `Docs/calibration-guide.md` for tuning priorities and workflow.
 
@@ -185,9 +200,9 @@ Tests use **pytest** and live in `Tests/`. A bare `pytest` from the repository r
 
 Run: `pytest -v`
 
-Key test properties verified (21 tests):
+Key test properties verified (151 tests):
 - Model initialization and output shape
-- Phase classification range (1-4)
+- Phase classification range (0-4), thresholds relative to baseline
 - ODE stays finite over long horizons (no blowup)
 - Dissipation bounds growth (no source -> energy decays)
 - ODE RHS is deterministic (no stochastic calls inside derivatives)

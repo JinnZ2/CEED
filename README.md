@@ -77,6 +77,7 @@ CEED/
 │   ├── calibration-guide.md               How to tune parameters against data
 │   └── numerical-audit.md                 Parameter, threshold, and units audit
 ├── Tests/                                 pytest suite
+├── legacy/                                Superseded versions + falsification record
 └── LICENSE
 ```
 
@@ -116,6 +117,11 @@ Then modify `Data/inputs.py` to reflect real-world data, read
 “Wait… are we screwed?”
 
 **Run the tests** with `pytest` from the repository root.
+
+[`legacy/`](./legacy/README.md) holds superseded model versions in runnable
+form, each linked to the test that falsified it and the revision that replaced
+it. A hypothesis that failed is a result — deleting it destroys the evidence
+and invites the next contributor to propose it again.
 
 **Before trusting any number this produces**, read
 [the numerical audit](./Docs/numerical-audit.md). It records which parameters
