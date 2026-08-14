@@ -17,17 +17,23 @@ import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# Everything, legacy/ included. The superseded versions in legacy/ are kept
+# runnable on purpose (see legacy/README.md) — a falsification record that no
+# longer parses is not a record. They are parse-checked but never imported,
+# because importing them would run designs this project has already rejected.
 PY_FILES = sorted(
     p for p in REPO_ROOT.rglob("*.py")
     if ".git" not in p.parts
 )
 
-# Modules importable without optional/heavy third-party extras.
+# Live modules only. Nothing from legacy/ belongs here.
 IMPORTABLE_MODULES = [
     "CEED_universal_model",
     "simulation.convergence_model",
-    "simulation.convergence_model_extended",
     "simulation.minimum_esm_code",
+    "simulation.mhd_spatial_model",
+    "simulation.unit_bridge",
+    "simulation.hindcast",
     "experiments.run_mc",
     "Data.inputs",
 ]

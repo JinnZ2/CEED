@@ -1,333 +1,269 @@
 """
 Minimal Earth System Model (ESM)
-IPCC AR6-calibrated feedback dynamics with retention collapse
+IPCC AR6-calibrated two-variable energy balance model.
 
-Key Features:
+State variables:
+    T   : global mean surface temperature anomaly [deg C above pre-industrial]
+    CO2 : atmospheric CO2 concentration [ppm]
 
-- Real physics units (W/m², °C, GtCO₂)
-- Solar cycle integration
-- Aerosol forcing scenarios
-- Permafrost carbon feedback
-- Cloud feedback nonlinearity
-- CRITICAL: Retention collapses at high energy (prevents unrealistic runaway)
+Governing equations:
+
+    C dT/dt = F_total(T, CO2, t) - lambda_eff * T
+
+    dCO2/dt = E_net(T) / alpha_CO2
+
+where:
+    C           = effective heat capacity of climate system [W yr / (m^2 K)]
+    F_total     = sum of radiative forcings [W/m^2]
+    lambda_eff  = effective climate feedback parameter [W / (m^2 K)]
+    E_net       = net CO2 emissions after sink uptake [GtC/yr]
+    alpha_CO2   = airborne fraction conversion (2.12 GtC per ppm)
+
+Forcings included:
+    - CO2 radiative forcing (logarithmic, IPCC AR6 formula)
+    - Solar cycle (11-year cosine modulation)
+    - Aerosol effective radiative forcing (scenario-dependent)
+    - Permafrost carbon feedback (threshold-activated)
+    - Cloud feedback (saturating positive)
+
+References:
+    - IPCC AR6 WG1 Chapter 7 (energy budget, ECS, feedback parameter)
+    - Myhre et al. (1998): CO2 radiative forcing formula
+    - Forster et al. (2021): ERF assessment in AR6
 """
-
-import argparse
-from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 from scipy.integrate import odeint
+import matplotlib.pyplot as plt
+from dataclasses import dataclass
+from typing import Tuple
+import argparse
 
 
 @dataclass
 class ClimateParameters:
-    """IPCC AR6-informed parameter ranges"""
+    """IPCC AR6-informed parameters with stated ranges.
 
-    # Equilibrium Climate Sensitivity (°C per doubling CO₂)
-    ECS_mean: float = 3.0
-    ECS_range: Tuple[float, float] = (2.5, 4.0)  # likely range
+    Default values are best estimates; ranges are for uncertainty analysis.
+    """
 
-    # Aerosol effective radiative forcing (W/m²), 1750-2019
-    aerosol_ERF_mean: float = -1.1
-    aerosol_ERF_range: Tuple[float, float] = (-1.7, -0.4)  # very likely
+    # Equilibrium Climate Sensitivity [deg C per CO2 doubling]
+    # AR6 WG1 Ch7: likely 2.5-4.0, best estimate 3.0
+    ECS: float = 3.0
 
-    # Total GHG forcing (W/m²), 1750-2019
-    GHG_ERF: float = 3.32
+    # Climate feedback parameter [W/(m^2 K)]
+    # lambda = F_2xCO2 / ECS, where F_2xCO2 ~ 3.7 W/m^2
+    # At ECS=3.0: lambda ~ 1.23 W/(m^2 K)
+    @property
+    def lambda_eff(self) -> float:
+        F_2xCO2 = 3.7  # W/m^2, forcing from CO2 doubling (Myhre et al. 1998)
+        return F_2xCO2 / self.ECS
 
-    # Carbon sinks (% of emissions absorbed)
-    land_sink: float = 0.31  # 31% to land
-    ocean_sink: float = 0.23  # 23% to ocean
-    total_sink_baseline: float = 0.54  # 54% total
+    # Effective heat capacity [W yr / (m^2 K)]
+    # Ocean mixed layer ~100m => C ~ 4.2e8 J/(m^2 K) ~ 13.3 W yr/(m^2 K)
+    # Using smaller value for upper-ocean response timescale (~10 yr)
+    heat_capacity: float = 10.0
 
-    # Permafrost carbon feedback (GtCO₂ per °C)
-    permafrost_feedback_range: Tuple[float, float] = (14, 175)  # wide uncertainty
+    # Aerosol effective radiative forcing [W/m^2], 1750-2019
+    # AR6: best estimate -1.1, very likely -1.7 to -0.4
+    aerosol_ERF: float = -1.1
+
+    # CO2 radiative forcing coefficient [W/m^2]
+    # F = F_2xCO2 * ln(CO2/CO2_0) / ln(2)
+    F_2xCO2: float = 3.7
+
+    # Carbon sinks
+    # AR6: land + ocean absorb ~54% of anthropogenic CO2
+    total_sink_fraction: float = 0.54
+    sink_weakening_rate: float = 0.08  # exponential decay with T [1/K]
+
+    # Permafrost feedback [GtCO2 per K above 0.5 K threshold]
+    # AR6: wide range 14-175 GtCO2/K, mid-estimate ~95
+    permafrost_sensitivity: float = 95.0
+    permafrost_threshold: float = 0.5  # K above pre-industrial
 
     # Solar cycle
-    solar_cycle_years: float = 11.0
-    solar_variability: float = 0.1  # ±10% of baseline forcing
+    solar_cycle_period: float = 11.0  # years
+    solar_amplitude: float = 0.1  # W/m^2 peak-to-peak
 
-    # Retention collapse parameters (CRITICAL FIX)
-    retention_base: float = 1.05  # Slight positive retention at low energy
-    retention_collapse_rate: float = 0.0008  # How fast retention drops with energy
+    # Cloud feedback [W/(m^2 K)]
+    # AR6: net cloud feedback +0.45 W/(m^2 K), range -0.1 to +0.97
+    cloud_feedback_strength: float = 0.45
+    cloud_saturation_temp: float = 4.0  # K where cloud feedback saturates
 
-    # Dissipation parameters
-    radiative_cooling_factor: float = 0.04  # Linear term
-    radiative_cooling_power: float = 1.2  # Nonlinear enhancement (T^1.2 scaling)
+    # Emissions [GtC/yr]
+    # Global Carbon Budget 2024: total anthropogenic (fossil + LULUCF) was
+    # 11.1 GtC/yr in 2023, preliminary 11.3 GtC/yr in 2024.
+    # Was 10.0 with a comment reading "current ~11 GtC/yr" — the comment was
+    # right and the value was not.
+    emissions_rate: float = 11.1
 
-    # Cloud feedback (net effect, includes both positive and negative branches)
-    cloud_feedback_strength: float = 0.5  # Moderate positive feedback
-    cloud_saturation_temp: float = 4.0  # °C where cloud feedback saturates
+    # Unit conversion
+    GtC_per_ppm: float = 2.12  # 1 ppm CO2 ~ 2.12 GtC in atmosphere
+    CO2_preindustrial: float = 280.0  # ppm
 
 
 class MinimalESM:
-    """
-    Minimal Earth System Model with scientifically grounded parameters
+    """Two-variable Earth System Model: (T, CO2).
+
+    Uses the standard energy balance formulation:
+        C dT/dt = F_net - lambda * T
     """
 
     def __init__(self, params: ClimateParameters = None):
         self.params = params or ClimateParameters()
+        self.T_initial = 1.1    # deg C above pre-industrial (~2024)
+        self.CO2_initial = 420  # ppm (~2024)
+        self.aerosol_scenario = "current"
 
-        # Initial state (normalized to ~pre-industrial + current warming)
-        self.T_initial = 1.1  # °C above pre-industrial (current state ~2024)
-        self.CO2_initial = 420  # ppm (current)
-        self.CO2_preindustrial = 280  # ppm
+    def co2_forcing(self, CO2: float) -> float:
+        """Radiative forcing from CO2 [W/m^2].
 
-        # Aerosol policy scenario
-        self.aerosol_scenario = "current"  # "current", "regulated", "removed"
+        F_CO2 = F_2xCO2 * ln(CO2 / CO2_0) / ln(2)
+
+        Reference: Myhre et al. (1998), adopted by IPCC AR6.
+        """
+        p = self.params
+        if CO2 <= 0:
+            return 0.0
+        return p.F_2xCO2 * np.log(CO2 / p.CO2_preindustrial) / np.log(2)
 
     def solar_forcing(self, t: float) -> float:
-        """
-        Solar cycle forcing (11-year period)
+        """Solar cycle forcing [W/m^2].
 
-        Args:
-            t: Time in years from present
-
-        Returns:
-            Additional forcing from solar variability (W/m²)
+        Cosine modulation with 11-year period.
         """
-        baseline = 0.0  # Normalized to current solar output
-        cycle = self.params.solar_variability * np.cos(
-            2 * np.pi * t / self.params.solar_cycle_years
-        )
-        return baseline + cycle
+        p = self.params
+        return p.solar_amplitude * np.cos(2 * np.pi * t / p.solar_cycle_period)
 
     def aerosol_forcing(self, t: float) -> float:
-        """
-        Aerosol forcing based on policy scenario
+        """Aerosol forcing [W/m^2] under selected policy scenario."""
+        p = self.params
 
-        Args:
-            t: Time in years from present
-
-        Returns:
-            Aerosol forcing (W/m², negative = cooling)
-        """
         if self.aerosol_scenario == "current":
-            # Maintain current levels
-            return self.params.aerosol_ERF_mean
+            return p.aerosol_ERF
 
         elif self.aerosol_scenario == "regulated":
-            # Gradual reduction over 10 years to -0.5 W/m²
-            reduction_rate = (self.params.aerosol_ERF_mean + 0.5) / 10.0
-            current_forcing = self.params.aerosol_ERF_mean + reduction_rate * t
-            return max(current_forcing, -0.5)
+            # Linear reduction from current to -0.5 W/m^2 over 10 years
+            target = -0.5
+            rate = (p.aerosol_ERF - target) / 10.0
+            return max(target, p.aerosol_ERF - rate * t)
 
         elif self.aerosol_scenario == "removed":
             # Rapid removal over 3 years
-            removal_rate = self.params.aerosol_ERF_mean / 3.0
-            current_forcing = self.params.aerosol_ERF_mean - removal_rate * t
-            return min(current_forcing, 0.0)
+            rate = p.aerosol_ERF / 3.0
+            return min(0.0, p.aerosol_ERF - rate * t)
 
         return 0.0
 
-    def retention_factor(self, T: float, CO2: float) -> float:
+    def cloud_feedback_forcing(self, T: float) -> float:
+        """Cloud feedback contribution [W/m^2].
+
+        Saturating positive feedback:
+            F_cloud = alpha * T * (1 - T / T_sat)  for T in [0, T_sat]
+
+        Physical basis: low clouds decrease with warming (positive feedback),
+        but effect saturates at high T as cloud regime shifts complete.
         """
-        CRITICAL: Retention collapses at high temperature
+        p = self.params
+        if T <= 0:
+            return 0.0
+        f = p.cloud_feedback_strength * T * (1.0 - T / p.cloud_saturation_temp)
+        return max(0.0, f)
 
-        Physical basis: High-energy states are harder to maintain
-        - Increased radiative losses
-        - Enhanced atmospheric/oceanic mixing
-        - Saturation of warming feedbacks
+    def permafrost_forcing(self, T: float) -> float:
+        """Forcing from permafrost carbon release [W/m^2].
 
-        Args:
-            T: Temperature anomaly (°C)
-            CO2: CO2 concentration (ppm)
-
-        Returns:
-            Retention multiplier (1.0 = balanced, >1.0 = accumulation, <1.0 = loss)
+        Activated above threshold temperature.
+        Conversion: permafrost_sensitivity GtCO2/K -> W/m^2 via
+        approximate relationship: 1000 GtCO2 ~ 0.5 W/m^2 sustained.
         """
-        # Base retention slightly above 1 (mild positive feedback)
-        base = self.params.retention_base
+        p = self.params
+        if T <= p.permafrost_threshold:
+            return 0.0
+        co2_released = p.permafrost_sensitivity * (T - p.permafrost_threshold)
+        return (co2_released / 1000.0) * 0.5
 
-        # Exponential collapse with temperature
-        # At T=0: retention ≈ 1.05
-        # At T=3: retention ≈ 0.98 (starts losing energy)
-        # At T=6: retention ≈ 0.92 (strong losses)
-        collapse = np.exp(-self.params.retention_collapse_rate * T**2)
+    def carbon_sink_fraction(self, T: float) -> float:
+        """Fraction of emissions absorbed by land + ocean sinks.
 
-        return base * collapse
+        Decreases exponentially with warming (AR6 WG1 Ch5).
 
-    def cloud_feedback(self, T: float) -> float:
+        Returns value in [0, 1].
         """
-        Cloud feedback with saturation
-
-        Net positive feedback at low T, saturates at high T
-
-        Args:
-            T: Temperature anomaly (°C)
-
-        Returns:
-            Additional forcing from cloud changes (W/m²)
-        """
-        # Logistic saturation
-        strength = self.params.cloud_feedback_strength
-        saturation_temp = self.params.cloud_saturation_temp
-
-        # Saturates as T → saturation_temp
-        feedback = strength * T * (1.0 - T / saturation_temp)
-
-        return max(0.0, feedback)  # Only positive feedback modeled here
-
-    def permafrost_feedback(self, T: float) -> float:
-        """
-        Permafrost carbon release
-
-        Args:
-            T: Temperature anomaly (°C)
-
-        Returns:
-            Additional forcing from permafrost CO2/CH4 (W/m²)
-        """
-        if T < 0.5:
-            return 0.0  # No significant thaw below 0.5°C
-
-        # Use mid-range estimate: ~95 GtCO₂ per °C
-        permafrost_mid = 95  # GtCO₂ per °C
-
-        # Convert to approximate forcing
-        # Rough: 1000 GtCO₂ ≈ 0.5 W/m² sustained forcing
-        CO2_released = permafrost_mid * (T - 0.5)
-        forcing = (CO2_released / 1000.0) * 0.5
-
-        return forcing
-
-    def carbon_sink_strength(self, T: float, CO2: float) -> float:
-        """
-        Carbon sink effectiveness (weakens with warming)
-
-        Args:
-            T: Temperature anomaly (°C)
-            CO2: CO2 concentration (ppm)
-
-        Returns:
-            Fraction of emissions absorbed (0-1)
-        """
-        baseline = self.params.total_sink_baseline
-
-        # Sink weakens with temperature
-        # At T=0: ~54% absorbed
-        # At T=3: ~40% absorbed
-        # At T=6: ~25% absorbed
-        weakening_factor = np.exp(-0.08 * T)
-
-        return baseline * weakening_factor
-
-    def radiative_dissipation(self, T: float) -> float:
-        """
-        Enhanced radiative cooling at high temperatures
-
-        Physical basis: Stefan-Boltzmann ~ T⁴, but linearized with enhancement
-
-        Args:
-            T: Temperature anomaly (°C)
-
-        Returns:
-            Dissipation rate (W/m²)
-        """
-        linear_term = self.params.radiative_cooling_factor * T
-        nonlinear_term = 0.01 * (T ** self.params.radiative_cooling_power)
-
-        return linear_term + nonlinear_term
+        p = self.params
+        return p.total_sink_fraction * np.exp(-p.sink_weakening_rate * T)
 
     def derivatives(self, state: np.ndarray, t: float) -> np.ndarray:
-        """
-        System derivatives for ODE integration
+        """ODE right-hand side.
 
-        State: [T, CO2]
+        State = [T, CO2]
 
-        Args:
-            state: Current state [T (°C), CO2 (ppm)]
-            t: Time (years from present)
-
-        Returns:
-            Derivatives [dT/dt, dCO2/dt]
+        dT/dt  = (1/C) * [F_total - lambda * T]
+        dCO2/dt = E_net / alpha_CO2
         """
         T, CO2 = state
+        p = self.params
 
-        # Forcings
-        solar = self.solar_forcing(t)
-        aerosol = self.aerosol_forcing(t)
-        cloud = self.cloud_feedback(T)
-        permafrost = self.permafrost_feedback(T)
+        # Total radiative forcing [W/m^2]
+        F_total = (self.co2_forcing(CO2)
+                   + self.solar_forcing(t)
+                   + self.aerosol_forcing(t)
+                   + self.cloud_feedback_forcing(T)
+                   + self.permafrost_forcing(T))
 
-        # CO2 forcing (logarithmic)
-        CO2_forcing = self.params.ECS_mean * np.log(CO2 / self.CO2_preindustrial) / np.log(2)
+        # Energy balance: C dT/dt = F_total - lambda * T
+        dT_dt = (F_total - p.lambda_eff * T) / p.heat_capacity
 
-        # Total forcing
-        total_forcing = solar + aerosol + CO2_forcing + cloud + permafrost
-
-        # Retention and dissipation
-        retention = self.retention_factor(T, CO2)
-        dissipation = self.radiative_dissipation(T)
-
-        # Temperature derivative
-        # Simplified: forcing drives T, retention amplifies, dissipation removes
-        dT_dt = 0.1 * (total_forcing * retention - dissipation)
-
-        # CO2 derivative (simplified emission + sink)
-        emissions_rate = 10.0  # GtC/year (current ~11 GtC/year)
-        sink_fraction = self.carbon_sink_strength(T, CO2)
-        net_emissions = emissions_rate * (1 - sink_fraction)
-
-        # Convert to ppm change (rough: 2.12 GtC = 1 ppm)
-        dCO2_dt = net_emissions / 2.12
+        # CO2 budget
+        sink = self.carbon_sink_fraction(T)
+        net_emissions = p.emissions_rate * (1.0 - sink)  # GtC/yr
+        dCO2_dt = net_emissions / p.GtC_per_ppm  # ppm/yr
 
         return np.array([dT_dt, dCO2_dt])
 
-    def simulate(self, years: float = 10, dt: float = 0.1) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Run simulation
-
-        Args:
-            years: Simulation duration (years)
-            dt: Timestep (years)
+    def simulate(self, years: float = 10, dt: float = 0.1
+                 ) -> Tuple[np.ndarray, np.ndarray]:
+        """Integrate the model forward.
 
         Returns:
-            t: Time array
-            solution: State array [T, CO2] over time
+            t: time array [years]
+            solution: state array [[T, CO2], ...], shape (N, 2)
         """
         t = np.arange(0, years, dt)
-        initial_state = np.array([self.T_initial, self.CO2_initial])
-
-        solution = odeint(self.derivatives, initial_state, t)
-
+        state0 = np.array([self.T_initial, self.CO2_initial])
+        solution = odeint(self.derivatives, state0, t)
         return t, solution
 
-    def plot_results(self, t: np.ndarray, solution: np.ndarray, save_path: str = None):
-        """
-        Plot temperature and CO2 trajectories
-
-        Args:
-            t: Time array
-            solution: State array
-            save_path: Optional path to save figure
-        """
-        import matplotlib.pyplot as plt
-
+    def plot_results(self, t: np.ndarray, solution: np.ndarray,
+                     save_path: str = None):
+        """Plot temperature and CO2 trajectories."""
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
         T = solution[:, 0]
         CO2 = solution[:, 1]
 
-        # Temperature
         ax1.plot(t, T, 'r-', linewidth=2, label='Temperature anomaly')
-        ax1.axhline(y=1.5, color='orange', linestyle='--', alpha=0.5, label='Paris 1.5°C target')
-        ax1.axhline(y=2.0, color='red', linestyle='--', alpha=0.5, label='Paris 2.0°C limit')
-        ax1.set_ylabel('Temperature Anomaly (°C)', fontsize=12)
-        ax1.set_title(f'Minimal ESM: {self.aerosol_scenario.capitalize()} Aerosol Scenario', fontsize=14)
+        ax1.axhline(y=1.5, color='orange', linestyle='--', alpha=0.5,
+                     label='Paris 1.5 K target')
+        ax1.axhline(y=2.0, color='red', linestyle='--', alpha=0.5,
+                     label='Paris 2.0 K limit')
+        ax1.set_ylabel('Temperature anomaly (K)', fontsize=12)
+        ax1.set_title(
+            f'Minimal ESM: {self.aerosol_scenario} aerosol scenario',
+            fontsize=14)
         ax1.legend()
         ax1.grid(alpha=0.3)
 
-        # CO2
-        ax2.plot(t, CO2, 'b-', linewidth=2, label='CO₂ concentration')
-        ax2.axhline(y=450, color='orange', linestyle='--', alpha=0.5, label='450 ppm threshold')
-        ax2.set_xlabel('Years from Present', fontsize=12)
-        ax2.set_ylabel('CO₂ (ppm)', fontsize=12)
+        ax2.plot(t, CO2, 'b-', linewidth=2, label='CO2 concentration')
+        ax2.axhline(y=450, color='orange', linestyle='--', alpha=0.5,
+                     label='450 ppm threshold')
+        ax2.set_xlabel('Years from present', fontsize=12)
+        ax2.set_ylabel('CO2 (ppm)', fontsize=12)
         ax2.legend()
         ax2.grid(alpha=0.3)
 
         plt.tight_layout()
-
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
         else:
@@ -336,42 +272,42 @@ class MinimalESM:
 
 def main():
     parser = argparse.ArgumentParser(description='Run Minimal ESM')
-    parser.add_argument('--horizon', type=float, default=10, help='Simulation horizon (years)')
-    parser.add_argument('--solar-phase', type=float, default=0.0, help='Solar cycle phase offset')
-    parser.add_argument('--aerosol', choices=['current', 'regulated', 'removed'],
+    parser.add_argument('--horizon', type=float, default=10,
+                        help='Simulation horizon (years)')
+    parser.add_argument('--aerosol',
+                        choices=['current', 'regulated', 'removed'],
                         default='current', help='Aerosol policy scenario')
     parser.add_argument('--plot', action='store_true', help='Show plot')
-    parser.add_argument('--save', type=str, default=None, help='Save plot to file')
+    parser.add_argument('--save', type=str, default=None,
+                        help='Save plot to file')
 
     args = parser.parse_args()
 
-    # Initialize model
     model = MinimalESM()
     model.aerosol_scenario = args.aerosol
 
-    # Run simulation
-    print(f"Running Minimal ESM for {args.horizon} years...")
+    print(f"Running Minimal ESM for {args.horizon} years")
     print(f"Aerosol scenario: {args.aerosol}")
+    print(f"ECS: {model.params.ECS} K,  lambda: {model.params.lambda_eff:.2f} W/(m^2 K)")
+    print(f"Heat capacity: {model.params.heat_capacity} W yr/(m^2 K)")
     print("=" * 60)
 
     t, solution = model.simulate(years=args.horizon)
 
-    # Results
     T_final = solution[-1, 0]
     CO2_final = solution[-1, 1]
-    T_change = T_final - model.T_initial
 
     print(f"\nResults after {args.horizon} years:")
-    print(f"  Temperature: {T_final:.2f}°C above pre-industrial ({T_change:+.2f}°C change)")
-    print(f"  CO₂: {CO2_final:.1f} ppm")
+    print(f"  Temperature: {T_final:.2f} K above pre-industrial "
+          f"({T_final - model.T_initial:+.2f} K change)")
+    print(f"  CO2: {CO2_final:.1f} ppm")
 
-    # Check thresholds
     if T_final > 2.0:
-        print(f"  ⚠️  EXCEEDS Paris 2.0°C limit")
+        print(f"  EXCEEDS Paris 2.0 K limit")
     elif T_final > 1.5:
-        print(f"  ⚠️  EXCEEDS Paris 1.5°C target")
+        print(f"  EXCEEDS Paris 1.5 K target")
     else:
-        print(f"  ✓ Within Paris targets")
+        print(f"  Within Paris targets")
 
     if args.plot or args.save:
         model.plot_results(t, solution, save_path=args.save)

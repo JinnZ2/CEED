@@ -1,3 +1,30 @@
+# To Be Added
+
+## Status
+
+| Item | Status | Where |
+|---|---|---|
+| MHD energy injection | Implemented | `simulation/mhd_spatial_model.py` — `mhd_energy_injection`, `poynting_flux` |
+| Magnetic feedback torque | Implemented | `simulation/mhd_spatial_model.py` — `magnetic_torque`, `effective_torque` |
+| Spatial modeling (4 zones + coupling) | Implemented | `simulation/mhd_spatial_model.py` — `SpatialCEED`, `COUPLING_MATRIX` |
+| Earth-ionosphere dynamo | Implemented | `simulation/mhd_spatial_model.py` — `ionospheric_dynamo_power_density` |
+| Real time APIs | Not started | `Data/inputs.py` still returns mock values |
+
+**Units note:** the MHD injection and dynamo formulas below are not
+dimensionally closed as written. Both are implemented verbatim so the spec is
+honoured, and each is paired with a dimensionally correct companion. See
+[Docs/numerical-audit.md](./Docs/numerical-audit.md) finding 8 for the
+derivation and the corrected magnitudes.
+
+**Zoning note:** polar / mid-latitude / equatorial partition the sphere by
+latitude and sum to 1.0. Oceanic is a surface type covering ~71% of the globe
+and overlaps all three, so it is modelled as a coupled reservoir rather than a
+fourth latitude band.
+
+---
+
+## Original specification
+
 Real time APIs
 
 Magnetohydrodynamics -
