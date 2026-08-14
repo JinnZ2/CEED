@@ -37,6 +37,7 @@ them; the rest are open. Reproduce any figure with `pytest` and the module
 | 19 | Reported skill was in-sample; held-out test is far worse | `hindcast.py` | **Critical** | **Open** |
 | 20 | Single attractor: cannot represent a state transition | `convergence_model.py` | **Critical** | **Open** (primitive built) |
 | 21 | Nothing modelled a cascade, in a project named for cascades | repo-wide | High | **Primitive built** |
+| 22 | Thresholds treated as safety margins; events cross them anyway | `tipping.py` | High | **Primitive built** |
 
 ---
 
@@ -256,6 +257,41 @@ Two results worth carrying forward, both from the demo rather than asserted:
 
 **Not calibrated.** The configuration is illustrative and chosen to expose the
 asymmetry. It is not wired into `ConvergencePredictor`.
+
+### 22 — A threshold is not a safety margin
+
+Bifurcation tipping needs the mean forcing to reach the fold. Event-induced
+tipping does not — a single discrete excursion can clear the barrier while the
+mean sits comfortably in the safe range.
+
+The barrier holding the lower branch collapses long before the fold is
+reached:
+
+| F | barrier |
+|---|---|
+| 0.000 | 0.25000 |
+| 0.200 | 0.08171 |
+| 0.300 | 0.02522 |
+| 0.384 | **0.00003** |
+
+A factor of ~7000 between F=0 and F=0.384. In Monte Carlo with rare discrete
+events (rate 0.05/yr, mean magnitude 0.10), **27% of 400-year trials tip with
+the mean forcing at exactly zero** — barrier at its maximum, fold nowhere near.
+
+This is motivated by the atmospheric-river mechanism: ARs occupy ~3% of the
+time but drive 40–80% of winter meltwater on peninsula ice shelves, with
+measured rain on Thwaites reaching 30 mm in summer and 9 mm in winter. Surface
+meltwater fills crevasses and hydrofractures the shelf — the mechanism that
+removed Larsen B in five weeks.
+
+**Tail shape matters, but conditionally.** With identical mean and variance,
+a heavy-tailed event distribution tips ~2× more often than a thin-tailed one
+*when the fold sits 3.85× the typical event size away*. At 1.28× the ordering
+reverses. The crossover is the finding: risk depends on the ratio of threshold
+to typical event size, not on variance alone (E11 in the falsification log).
+
+**Not integrated.** Same standing as findings 20 and 21 — the primitive
+exists, `ConvergencePredictor` does not use it.
 
 ### 18 — The magnetic subsystem cannot track the solar cycle
 

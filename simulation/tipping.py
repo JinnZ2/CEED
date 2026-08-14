@@ -67,7 +67,7 @@ convergence_model.py.
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -299,6 +299,136 @@ def rolling_variance(series: np.ndarray, window: int) -> np.ndarray:
     return out
 
 
+def potential(x: float, F: float) -> float:
+    """Potential U(x) whose gradient gives the fast dynamics.
+
+    dx/dt = -dU/dx, so U(x) = -x^2/2 + x^4/4 - F*x.
+    """
+    return -x ** 2 / 2.0 + x ** 4 / 4.0 - F * x
+
+
+def barrier_height(F: float) -> float:
+    """Height of the potential barrier holding the system on the lower branch.
+
+    This is what a shock has to clear to tip the system while the mean forcing
+    is still below the fold. It collapses toward zero as F approaches the
+    fold: 0.250 at F=0, 0.0252 at F=0.30, 0.00003 at F=0.384.
+
+    A system described as "safely below threshold" needs a smaller and smaller
+    kick the closer it gets.
+
+    Returns:
+        Barrier height, or 0.0 once no barrier exists (|F| >= FOLD_F).
+    """
+    if abs(F) >= FOLD_F:
+        return 0.0
+    eq = TippingElement.equilibria(F)
+    if len(eq) < 3:
+        return 0.0
+    return potential(eq[1], F) - potential(eq[0], F)
+
+
+@dataclass
+class ForcingEvent:
+    """A discrete forcing excursion — an atmospheric river, a storm, a pulse."""
+    time: float
+    magnitude: float
+    duration: float = 5.0
+
+
+def generate_events(rate: float,
+                    years: float,
+                    mean_magnitude: float,
+                    rng: np.random.Generator,
+                    heavy_tailed: bool = True,
+                    duration: float = 5.0) -> List[ForcingEvent]:
+    """Pre-generate a Poisson event train.
+
+    Args:
+        rate: Events per unit time.
+        years: Horizon.
+        mean_magnitude: Mean forcing excursion per event.
+        rng: Seeded generator. Events are built BEFORE integration so the
+            derivative stays deterministic.
+        heavy_tailed: If True, magnitudes are exponential; if False, normal
+            with standard deviation equal to the mean. Both then have the
+            same mean AND the same variance, so any difference in outcome is
+            tail shape alone.
+        duration: How long each event holds.
+
+    Returns:
+        Events sorted by time.
+    """
+    n = rng.poisson(rate * years)
+    times = np.sort(rng.uniform(0.0, years, n))
+    if heavy_tailed:
+        mags = rng.exponential(mean_magnitude, n)
+    else:
+        mags = rng.normal(mean_magnitude, mean_magnitude, n)
+    return [ForcingEvent(float(t), float(m), duration)
+            for t, m in zip(times, mags)]
+
+
+def event_forcing(base: float,
+                  events: Sequence[ForcingEvent]) -> Callable[[float], float]:
+    """Build F(t) = base + the sum of any events active at t.
+
+    Event arrays are hoisted out of the closure so each call is a vectorised
+    comparison rather than a Python loop over every event. The forcing is
+    evaluated three times per RK4 step, so the loop version dominated runtime.
+    """
+    if not events:
+        return lambda t: base
+
+    starts = np.array([e.time for e in events])
+    ends = np.array([e.time + e.duration for e in events])
+    mags = np.array([e.magnitude for e in events])
+
+    def F(t: float) -> float:
+        active = (starts <= t) & (t < ends)
+        return base + float(mags[active].sum())
+    return F
+
+
+def escape_probability(base_forcing: float,
+                       rate: float,
+                       mean_magnitude: float,
+                       trials: int = 200,
+                       years: float = 500.0,
+                       dt: float = 0.1,
+                       heavy_tailed: bool = True,
+                       seed: int = 0,
+                       tau_fast: float = 1.0,
+                       tau_slow: float = 50.0) -> float:
+    """Fraction of trials that tip, with mean forcing held BELOW the fold.
+
+    Bifurcation-induced tipping needs the forcing to cross the fold.
+    Event-induced tipping does not: a single excursion can clear the barrier
+    while the mean sits in the safe range. That is the atmospheric-river
+    case — rare, brief, and sufficient.
+
+    Raises:
+        ValueError: if base_forcing is already at or beyond the fold, where
+            the question is meaningless.
+    """
+    if abs(base_forcing) >= FOLD_F:
+        raise ValueError(
+            f"base_forcing {base_forcing} is already past the fold {FOLD_F}; "
+            "no barrier remains to escape")
+
+    rng = np.random.default_rng(seed)
+    tipped = 0
+    for _ in range(trials):
+        events = generate_events(rate, years, mean_magnitude, rng,
+                                 heavy_tailed=heavy_tailed)
+        el = TippingElement(tau_fast=tau_fast, tau_slow=tau_slow, x0=-1.0)
+        _, x, _ = el.simulate(event_forcing(base_forcing, events),
+                              years=years, dt=dt)
+        if np.any(x > 0.0):
+            tipped += 1
+    return tipped / trials
+
+
 def recovery_rate(element: TippingElement, F: float,
                   branch: str = 'lower') -> float:
     """Linear recovery rate |d/dx(dx/dt)| at a stable equilibrium.
@@ -376,6 +506,30 @@ if __name__ == "__main__":
     print(f"  switches DOWN at F = {down_switch:+.4f}")
     print(f"  loop width    = {up_switch - down_switch:.4f}  "
           f"(0 would mean no hysteresis)")
+
+    print("\n" + "-" * 66)
+    print("EVENT-INDUCED TIPPING: crossing without approaching")
+    print("-" * 66)
+    print("  Bifurcation tipping needs the mean forcing to reach the fold.")
+    print("  A discrete excursion does not. Atmospheric rivers occupy ~3% of")
+    print("  the time yet drive 40-80% of winter meltwater on peninsula")
+    print("  shelves; rain on Thwaites reaches 30 mm in summer, 9 mm in")
+    print("  winter. Hydrofracture then splits the shelf in weeks.\n")
+    print(f"  {'base F':>8} {'barrier':>10} {'heavy tail':>12} {'thin tail':>11}")
+    for F in (0.0, 0.15, 0.25):
+        h = escape_probability(F, rate=0.05, mean_magnitude=0.10, trials=60,
+                               years=400, dt=0.2, seed=5, heavy_tailed=True)
+        th = escape_probability(F, rate=0.05, mean_magnitude=0.10, trials=60,
+                                years=400, dt=0.2, seed=5, heavy_tailed=False)
+        print(f"  {F:>8.2f} {barrier_height(F):>10.5f} {h:>11.0%} {th:>11.0%}")
+    print("\n  At F=0 the barrier is at its maximum and the mean forcing is")
+    print("  nowhere near the fold — and the system still tips. 'Below")
+    print("  threshold' is not a safety claim once events are in the picture.")
+    print("\n  Both event distributions have the SAME mean and variance; only")
+    print("  the tail differs. The heavy tail dominates here because the fold")
+    print("  sits 3.85x the typical event size away. Shrink that ratio and the")
+    print("  ordering reverses — see E11 in legacy/README.md. Variance alone")
+    print("  does not tell you the risk.")
 
     print("\n" + "-" * 66)
     print("CONTRAST: the convergence model under the same treatment")

@@ -250,3 +250,93 @@ def test_convergence_model_has_one_attractor():
         finals.append(float(np.sum(sol[-1])))
 
     assert max(finals) - min(finals) < 1.0
+
+
+# --- event-induced tipping -------------------------------------------------
+
+def test_potential_gradient_matches_the_dynamics():
+    """dx/dt = -dU/dx, checked numerically."""
+    from simulation.tipping import potential
+    F, x, eps = 0.2, -0.4, 1e-6
+    numeric = -(potential(x + eps, F) - potential(x - eps, F)) / (2 * eps)
+    assert numeric == pytest.approx(x - x ** 3 + F, abs=1e-6)
+
+
+def test_barrier_collapses_toward_the_fold():
+    """
+    The kick needed to tip shrinks as forcing rises: 0.250 at F=0 down to
+    ~3e-5 at F=0.384. "Safely below threshold" buys less and less.
+    """
+    from simulation.tipping import barrier_height
+    heights = [barrier_height(F) for F in (0.0, 0.1, 0.2, 0.3, 0.38)]
+    assert all(a > b for a, b in zip(heights, heights[1:]))
+    assert heights[0] == pytest.approx(0.25, abs=1e-6)
+    assert heights[-1] < 0.001
+
+
+def test_no_barrier_beyond_the_fold():
+    from simulation.tipping import barrier_height
+    assert barrier_height(FOLD_F * 1.1) == 0.0
+    assert barrier_height(-FOLD_F * 1.1) == 0.0
+
+
+def test_generated_events_are_ordered_and_positive_rate():
+    from simulation.tipping import generate_events
+    rng = np.random.default_rng(3)
+    events = generate_events(rate=0.1, years=500, mean_magnitude=0.2, rng=rng)
+    times = [e.time for e in events]
+    assert times == sorted(times)
+    assert all(0.0 <= t <= 500 for t in times)
+
+
+def test_event_forcing_is_active_only_within_its_window():
+    from simulation.tipping import ForcingEvent, event_forcing
+    F = event_forcing(0.1, [ForcingEvent(time=10.0, magnitude=0.5, duration=5.0)])
+    assert F(9.9) == pytest.approx(0.1)
+    assert F(10.0) == pytest.approx(0.6)
+    assert F(14.9) == pytest.approx(0.6)
+    assert F(15.0) == pytest.approx(0.1)
+
+
+def test_overlapping_events_add():
+    from simulation.tipping import ForcingEvent, event_forcing
+    F = event_forcing(0.0, [ForcingEvent(0.0, 0.2, 10.0),
+                            ForcingEvent(5.0, 0.3, 10.0)])
+    assert F(7.0) == pytest.approx(0.5)
+
+
+def test_empty_event_list_gives_constant_forcing():
+    from simulation.tipping import event_forcing
+    assert event_forcing(0.25, [])(123.0) == pytest.approx(0.25)
+
+
+def test_system_tips_with_mean_forcing_at_zero():
+    """
+    The headline: bifurcation tipping needs the mean forcing to reach the
+    fold; event-induced tipping does not. At F=0 the barrier is at maximum
+    and the system still escapes.
+    """
+    from simulation.tipping import escape_probability
+    p = escape_probability(0.0, rate=0.05, mean_magnitude=0.10, trials=40,
+                           years=400, dt=0.2, seed=5, heavy_tailed=True)
+    assert p > 0.0
+
+
+def test_escape_probability_rises_with_base_forcing():
+    from simulation.tipping import escape_probability
+    kw = dict(rate=0.05, mean_magnitude=0.10, trials=40, years=400,
+              dt=0.2, seed=5, heavy_tailed=True)
+    assert escape_probability(0.25, **kw) > escape_probability(0.0, **kw)
+
+
+def test_escape_probability_rejects_forcing_past_the_fold():
+    from simulation.tipping import escape_probability
+    with pytest.raises(ValueError):
+        escape_probability(FOLD_F * 1.1, rate=0.05, mean_magnitude=0.1)
+
+
+def test_escape_probability_is_reproducible():
+    from simulation.tipping import escape_probability
+    kw = dict(rate=0.05, mean_magnitude=0.10, trials=25, years=300,
+              dt=0.2, seed=17, heavy_tailed=True)
+    assert escape_probability(0.1, **kw) == escape_probability(0.1, **kw)

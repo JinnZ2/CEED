@@ -228,6 +228,21 @@ already floating — and matters because of what it stops holding back. The
 visible event is fast and nearly harmless; the consequence it commits to is
 slow and large.
 
+**Event-induced tipping** (`escape_probability`, `barrier_height`): a system
+can tip while the mean forcing stays below the fold, because a single discrete
+excursion clears the barrier. The barrier collapses from 0.250 at F=0 to
+0.00003 at F=0.384, so "safely below threshold" buys less and less.
+
+At F=0 — barrier at maximum, mean forcing nowhere near the fold — 27% of
+400-year trials still tip. Motivated by atmospheric rivers: ~3% of the time,
+but 40-80% of winter meltwater on peninsula shelves, with measured rain on
+Thwaites of 30 mm in summer and 9 mm in winter, driving hydrofracture.
+
+Tail shape matters, but only when the fold sits far from the typical event
+size. At 3.85x it, a heavy tail tips ~2x more often than a thin tail of
+identical mean AND variance; at 1.28x the ordering reverses (E11). Variance
+alone does not tell you the risk.
+
 Noise is pre-generated and passed in, never drawn inside the derivative.
 
 **Not integrated** into `ConvergencePredictor`. Wiring it in changes the

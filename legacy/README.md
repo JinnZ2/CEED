@@ -30,6 +30,7 @@ Everything here has been through it at least once.
 | *(no file)* | "Mean R² is positive" as a claim of skill | E8 | claim retracted |
 | *(no file)* | "Add an ENSO oscillator" as the fix for E8 | E9 | wrong shape; replaced by `simulation/tipping.py` |
 | *(no file)* | Cascade coupling to raw `h` | E10 | inverted stabilising links; fixed in `cascade.py` |
+| *(no file)* | "Heavy tails always dominate" | E11 | true only when the fold is far from typical event size |
 
 All five files still execute. Run them to see the falsified behaviour
 directly:
@@ -422,6 +423,51 @@ respond and Thwaites tips at `t = 4`, so the help arrives four hundred years
 late. The demo now shows that instead, because it is the more useful result:
 **a protective coupling slower than the collapse it prevents is worthless.**
 Sign alone does not determine whether an interaction helps.
+
+---
+
+## E11 — "Heavy tails always dominate the tipping risk"
+
+**Hypothesis.** Rare extreme events tip a bistable system more readily than
+ordinary fluctuations of the same mean and variance, because the tail reaches
+further. Predicted before running: the heavy-tailed case would dominate at
+every forcing level.
+
+**Test.** Poisson event trains with identical mean and identical variance —
+Exponential(mu) against Normal(mu, mu) — driving a tipping element whose mean
+forcing is held below the fold.
+
+**Result — falsified as stated.** At mean magnitude 0.30 the ordering was
+*backwards*: thin tail 89%, heavy tail 75% at F=0.
+
+**Diagnosis.** The fold sat only 1.28x the typical event size away. At that
+distance Normal(mu, mu) puts *more* mass past the threshold (0.389) than
+Exponential(mu) does (0.277), because the exponential piles probability near
+zero to pay for its tail. The tail only wins further out.
+
+| mean magnitude | fold / mean | P(exp > fold) | P(norm > fold) | ratio |
+|---|---|---|---|---|
+| 0.30 | 1.28 | 0.2772 | 0.3886 | **0.7x** |
+| 0.20 | 1.92 | 0.1459 | 0.1776 | 0.8x |
+| 0.15 | 2.57 | 0.0768 | 0.0587 | 1.3x |
+| 0.10 | 3.85 | 0.0213 | 0.0022 | **9.7x** |
+| 0.06 | 6.42 | 0.0016 | 0.0000 | 53000x |
+
+**Edited claim.** Heavy tails dominate *when the threshold is far out relative
+to the typical event*. Re-run at mean magnitude 0.10 (fold 3.85x away), the
+predicted ordering appears: 27% heavy against 15% thin at F=0.
+
+**What survived, and it is the more important half.** The headline result was
+never about tails. At F=0 — barrier at its maximum, mean forcing nowhere near
+the fold — the system tips in 15-27% of 400-year trials regardless of
+distribution. **A threshold is not a safety margin once discrete events are in
+the picture.** That claim was strengthened, not weakened, by the tail
+hypothesis failing.
+
+**Unknown surfaced.** Reporting event risk as a variance understates it when
+the threshold is far out and overstates it when close. Neither the convergence
+model nor the red team report distinguishes these regimes; both speak of
+"thresholds" as though crossing required the mean to arrive.
 
 ---
 
