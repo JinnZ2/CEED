@@ -28,6 +28,7 @@ Everything here has been through it at least once.
 | `minimum_esm_code_v0.py` | Retention collapse as runaway safeguard; ECS as forcing | E3, E4 | superseded |
 | `run_mc_v0.py` | Same ECS-as-forcing error, sampled | E4 | superseded |
 | *(no file)* | "Mean R² is positive" as a claim of skill | E8 | claim retracted |
+| *(no file)* | "Add an ENSO oscillator" as the fix for E8 | E9 | wrong shape; replaced by `simulation/tipping.py` |
 
 All five files still execute. Run them to see the falsified behaviour
 directly:
@@ -325,6 +326,62 @@ cross-system lag correlations, which nothing here scores yet.
 Reproduce with `python -m simulation.validation`. The separation is verified,
 not assumed: `test_calibration_cannot_see_the_test_window` poisons every
 test-window observation and asserts the fitted parameters do not move.
+
+---
+
+## E9 — "Add an oscillator" as the fix for the oceanic failure
+
+Also no file. This entry records a hypothesis *this project proposed and then
+killed within the same session*, which is the cheapest kind of falsification
+and worth keeping visible.
+
+**Hypothesis.** The oceanic subsystem's out-of-sample collapse (E8) is caused
+by a missing ENSO mode. Adding a recharge oscillator — the Jin (1997)
+two-equation form — would supply the interannual variability the model cannot
+produce, and the fit would improve.
+
+**Supporting evidence, which was real.** Model residuals are not white:
+lag-1 autocorrelation +0.917 oceanic, +0.839 solar, +0.363 atmospheric.
+Detrended observed temperature matches documented ENSO phase in **9 of 11**
+non-neutral years, with the largest excursions exactly where expected (2016
+peak +0.161, the 2021–22 La Niña −0.177/−0.172, 2024 peak +0.147). The
+detrended ENSO range is 0.338 K against a model atmospheric RMSE of 0.13 K —
+the signal the model cannot make is 2.6× its total error.
+
+**Falsified — wrong shape, not wrong topic.** A recharge oscillator produces
+variance around a *fixed* equilibrium. It cannot produce a state that does not
+come back. But the observed record shows exactly that: Antarctic sea ice broke
+in September 2016 and the 2023–2025 record lows sit inside the new regime, not
+as excursions from the old one. [Nature Communications
+(2025)](https://www.nature.com/articles/s41467-025-66143-7) finds super El
+Niños drive "abrupt, persistent transitions ... for years or even decades"
+after the event fades. An oscillator models none of that.
+
+**Second sub-hypothesis, also falsified.** ENSO is an ocean↔atmosphere heat
+exchange, so the two should be *anti*-correlated — the discharge signature, and
+a direct test of CEED's coupling term. Measured: `corr(T, OHC) = +0.338`, with
+El Niño years showing *higher* upper-ocean heat content. Not supported. Global
+0–700 m OHC is trend-dominated, the discharge signal is tropical-Pacific
+specific, and annual resolution smears ENSO's ~6-month lead/lag. This repo's
+OHC series is also coarse — 0.5×10²² J steps, with a 2017–19 dip that looks
+like an artifact.
+
+**Edited claim.** The requirement is not an oscillator but a **fast–slow
+bistable element**: two branches, a fold, hysteresis, and separated
+timescales so commitment precedes visible change. Built as
+`simulation/tipping.py`, and deliberately kept standalone — the convergence
+model still has one attractor, and wiring the two together changes the model's
+character rather than fixing a defect.
+
+**Unknown surfaced.** The regime break is September 2016, which sits *inside*
+the 2010–2019 training window. That is a better explanation of E8's oceanic
+failure than a missing oscillator: a stationary model fitted across a
+non-stationary record produces a decent in-sample blend and a bad
+extrapolation. Fitting pre- and post-break separately does shift the
+parameters (`A_0` 2.94 → 4.78), but `atm_fraction` hit the search boundary on
+~5 scored points, so this repo's 15 annual values **cannot** establish the
+break. The sea-ice literature establishes it with 45 years of daily data; take
+it from there, not from here.
 
 ---
 

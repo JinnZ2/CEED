@@ -30,7 +30,8 @@ CEED/
 │   ├── mhd_spatial_model.py         # MHD injection, torque, dynamo, zone coupling
 │   ├── unit_bridge.py               # Energy indices <-> physical observables
 │   ├── hindcast.py                  # Validation against 2010-2024 observations
-│   └── validation.py                # Held-out train/test split
+│   ├── validation.py                # Held-out train/test split
+│   └── tipping.py                   # Bistability, hysteresis, commitment
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
 │   └── run_mc.py                    # Monte Carlo uncertainty analysis
@@ -58,6 +59,7 @@ CEED/
 | Run Monte Carlo | `python experiments/run_mc.py --n 200 --horizon 10` |
 | Run hindcast | `python -m simulation.hindcast --compare` |
 | Held-out validation | `python -m simulation.validation` |
+| Tipping elements | `python simulation/tipping.py` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -193,6 +195,34 @@ dCO2/dt = E_net(T) / alpha_CO2
 - C = 10.0 W yr/(m^2 K) — effective heat capacity
 - lambda_eff = F_2xCO2 / ECS — climate feedback parameter
 - F_2xCO2 = 3.7 W/m^2 — CO2 doubling forcing (Myhre et al. 1998)
+
+### Tipping Elements (`simulation/tipping.py`)
+
+A fast-slow bistable primitive. The convergence model has **one attractor** —
+four initial conditions spanning 250 to 1501 total energy all land within 0.05
+of each other after 200 years — so it cannot represent a system pushed into a
+new state that persists. This module supplies what is missing:
+
+```
+dx/dt = (x - x^3 + F(t) + noise) / tau_fast     internal state
+dh/dt = (x - h) / tau_slow                       observable response
+```
+
+Fold at |F| = 2/(3 sqrt 3) = 0.3849, x = +/-1/sqrt(3).
+
+- **Bistability**: two stable branches while |F| < 0.3849
+- **Hysteresis**: up-ramp switches at +0.399, down-ramp at -0.399
+- **Critical slowing down**: recovery time 0.50 -> 12.50 approaching the fold
+- **Commitment lag**: x crosses while h has moved 3.2% of its eventual change
+
+The commitment lag is the point. `tau_slow >> tau_fast` means the system is
+decided long before it looks decided — the ice sheet case, where the shelf
+goes in months and the sheet responds over centuries.
+
+Noise is pre-generated and passed in, never drawn inside the derivative.
+
+**Not integrated** into `ConvergencePredictor`. Wiring it in changes the
+model's character and is a maintainer decision.
 
 ### Universal Framework (`CEED_universal_model.py`)
 

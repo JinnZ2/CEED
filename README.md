@@ -68,7 +68,8 @@ CEED/
 │   ├── mhd_spatial_model.py               MHD injection, torque, dynamo, 4-zone coupling
 │   ├── unit_bridge.py                     Energy indices <-> physical observables
 │   ├── hindcast.py                        Validation against 2010-2024 observations
-│   └── validation.py                      Held-out train/test split
+│   ├── validation.py                      Held-out train/test split
+│   └── tipping.py                         Bistability, hysteresis, commitment lag
 ├── experiments/
 │   └── run_mc.py                          Monte Carlo uncertainty quantification
 ├── Data/
@@ -112,7 +113,10 @@ python experiments/run_mc.py --n 200
 # 7. MHD injection, hemispheric torque, dynamo, and zone coupling
 python simulation/mhd_spatial_model.py
 
-# 8. Optional: Streamlit GUI
+# 8. Tipping elements: hysteresis and the commitment lag
+python simulation/tipping.py
+
+# 9. Optional: Streamlit GUI
 streamlit run dashboard_starter.py
 ```
 

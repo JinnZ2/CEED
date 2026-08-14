@@ -35,6 +35,7 @@ them; the rest are open. Reproduce any figure with `pytest` and the module
 | 17 | `pytest` collected zero tests | `Tests/` | High | **RESOLVED** |
 | 18 | Magnetic subsystem cannot track the solar cycle | `convergence_model.py` | Medium | **Open** |
 | 19 | Reported skill was in-sample; held-out test is far worse | `hindcast.py` | **Critical** | **Open** |
+| 20 | Single attractor: cannot represent a state transition | `convergence_model.py` | **Critical** | **Open** (primitive built) |
 
 ---
 
@@ -172,6 +173,58 @@ over days, not 14 months ([Parker & Linares 2024](https://arxiv.org/abs/2406.086
 **−0.8 ± 0.7 Sv/decade** since 2004 — uncertainty nearly as large as the
 trend, and no clear slowdown further north
 ([Carbon Brief](https://interactive.carbonbrief.org/amoc-explainer/index.html)).
+
+### 20 — One attractor, no memory: state transitions are unrepresentable
+
+The convergence model cannot represent the phenomenon the red team report is
+about. Integrated 200 years from four initial conditions:
+
+| initial total | final total |
+|---|---|
+| 250.2 | 495.0 |
+| 500.5 | 495.1 |
+| 800.8 | 495.1 |
+| 1501.5 | 495.1 |
+
+Spread: **0.05 energy units**. Every trajectory forgets where it started.
+
+The state-dependent parameters do not help. `effective_alpha('atmospheric')`
+evaluated at the baseline state and at 3× the baseline state, same `t`,
+returns the *identical* value (0.083608). It is a pure function of
+`(E_now, t)` — there is no history argument anywhere in the model. A shock of
+any magnitude leaves no trace once it passes.
+
+This matters because two observed systems do the opposite:
+
+- **Antarctic sea ice.** Slightly positive trend 1979–2015, then a break in
+  September 2016. Record lows in 2023–2025 sit inside the new regime rather
+  than being excursions from the old one, with "increased persistence in sea
+  ice extent anomalies and a strongly reduced tendency to return to the mean
+  state" ([Comms Earth & Environment, 2025](https://www.nature.com/articles/s43247-025-02107-5)).
+- **Marine ice sheets.** Tipping-element assessments describe components that
+  "can remain tipped even if the background climate falls back below the
+  threshold" — hysteresis, by definition.
+
+And [Nature Communications (2025)](https://www.nature.com/articles/s41467-025-66143-7)
+finds super El Niños (>2σ) drive "abrupt, persistent transitions ... for years
+or even decades" after the event fades.
+
+`simulation/tipping.py` supplies the missing primitive: a fast–slow bistable
+element with a fold at |F| = 0.3849, genuine hysteresis (loop width 0.797),
+critical slowing down (recovery time 0.50 → 12.50 approaching the fold), and a
+**commitment lag** — the internal state crosses while the observable has moved
+3.2% of its eventual change.
+
+That last quantity is the one a red team wants. Ice sheets are the clearest
+case: the Thwaites *eastern ice shelf* may break up within months, while
+*ice sheet* collapse unfolds over centuries to millennia. The dangerous
+property is not the speed — it is that the commitment passes silently and the
+response arrives centuries later.
+
+**Still open.** The primitive is standalone. It is not wired into
+`ConvergencePredictor`, so the convergence model retains its single attractor.
+Integrating it is a modelling decision, not a bug fix, and is left to the
+maintainer.
 
 ### 18 — The magnetic subsystem cannot track the solar cycle
 
