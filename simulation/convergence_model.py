@@ -243,6 +243,14 @@ class SystemParameters:
         base = self.E_baseline
         return {k: r * base for k, r in self.phase_threshold_ratios.items()}
 
+    # Solar cycle shape. Both are DERIVED, not fitted — see source_rate() for
+    # the low-pass lag/gain derivation. They are parameters rather than
+    # literals so a calibration can re-derive them from a restricted
+    # observation window (see simulation/validation.py), which is what keeps
+    # a train/test split honest.
+    solar_phase_offset: float = 2.045   # yr, source leads the state peak
+    solar_modulation: float = 0.485     # fractional source modulation
+
     # Anthropogenic forcing (None = disabled, static parameters)
     anthropogenic: Optional[AnthropogenicForcing] = None
 
@@ -313,8 +321,11 @@ class ConvergencePredictor:
             # to reproduce the observed +/-55.5 sfu half-amplitude:
             #
             #     modulation = 55.5 / (gain * E_eq) = 0.485
-            return 68.4 * (1.0 + 0.485 * np.cos(
-                2 * np.pi * (t + 2.045) / 11.0))
+            #
+            # Both constants live in SystemParameters so a calibration can
+            # re-derive them from a restricted window without editing code.
+            return 68.4 * (1.0 + self.params.solar_modulation * np.cos(
+                2 * np.pi * (t + self.params.solar_phase_offset) / 11.0))
         elif system == 'magnetic':
             # Source sustains E_eq=92.5 (geodynamo + solar wind baseline).
             # Variability comes from solar coupling, not source modulation.

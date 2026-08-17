@@ -23,17 +23,33 @@ it can't predict the future.
 python -m simulation.hindcast --compare     # baseline vs anthropogenic
 python -m simulation.hindcast --system solar  # single system detail
 python -m simulation.hindcast --plot        # with plots
+python -m simulation.validation             # held-out train/test split
 ```
 
-## Current Scores (as of calibration v2)
+## Current Scores
 
-| System      | Baseline R² | Anthro R² | Grade | Status              |
-|-------------|-------------|-----------|-------|---------------------|
-| Solar       | -0.45       | -0.44     | F     | Needs work          |
-| Magnetic    | -0.02       | -0.03     | F     | Near zero (neutral) |
-| Atmospheric | -0.22       | +0.51     | C     | Calibrated          |
-| Oceanic     | -1.45       | +0.69     | B     | Calibrated          |
-| **Mean**    | -0.53       | **+0.18** |       | Positive            |
+**In-sample** (full record 2010-2024, the window parameters were tuned on):
+
+| System      | Baseline R² | Anthro R² | Grade |
+|-------------|-------------|-----------|-------|
+| Solar       | -0.45       | +0.36     | C     |
+| Magnetic    | -0.02       | -0.21     | F     |
+| Atmospheric | -0.22       | +0.47     | C     |
+| Oceanic     | -1.45       | +0.63     | B     |
+| **Mean**    | -0.53       | **+0.31** |       |
+
+**Out-of-sample** (train 2010-2019, test 2020-2024) — this is the honest one:
+
+| System      | train R² | test R²    | gap    |
+|-------------|----------|------------|--------|
+| Solar       | -0.020   | **+0.555** | -0.575 |
+| Magnetic    | -1.193   | +0.057     | -1.249 |
+| Atmospheric | +0.316   | +0.042     | +0.274 |
+| Oceanic     | +0.773   | **-2.705** | +3.478 |
+| **Mean**    | -0.031   | **-0.513** | +0.482 |
+
+The in-sample mean of +0.31 becomes **-0.513** held out. Quote the second
+table, not the first.
 
 ## Parameter Hierarchy
 
@@ -109,23 +125,32 @@ Only tune after static parameters are working:
 
 ## Known Issues and Next Steps
 
-### Solar (F grade)
-**Problem**: the model tracks the cycle direction but amplitudes don't match.
-The cos-based source function captures the period but not the asymmetric
-rise/fall of real solar cycles.  SC24 and SC25 have different amplitudes.
+### Solar (was F, now C — and it generalises)
+**Fixed.** The cycle was phased on the *source* while F10.7 is the *state*.
+The subsystem is a first-order low-pass, so the state lags the source by
+`arctan(omega/lambda_eff)/omega` = 1.545 yr and is attenuated by 0.635.
+`solar_phase_offset` and `solar_modulation` now carry the compensation, both
+derived rather than fitted.
 
-**Next step**: replace single cosine with superposition of harmonics, or
-use a data-driven source function that takes observed F10.7 as input for
-hindcast and a parametric cycle for projection.
+This is the only subsystem with a **negative** train-test gap, i.e. the only
+one that does better out of sample than in. That is what a derived constant
+buys you.
 
-### Magnetic (F grade, near zero)
-**Problem**: R²≈0 means the model produces roughly constant Kp while
-observations show solar-cycle-correlated variability.  The solar→magnetic
-coupling (c=0.015, η=0.15) transfers energy too slowly relative to
-magnetic dissipation (λ=0.15).
+**Remaining**: a single cosine still cannot capture the asymmetric rise/fall
+of real cycles, or the differing amplitudes of SC24 and SC25. Harmonics or a
+data-driven source would help — but note that fitting harmonics to 15 years
+of data is exactly the move the held-out test is there to catch.
 
-**Next step**: strengthen solar→magnetic coupling or reduce magnetic
-dissipation so that solar cycle variability propagates into Kp.
+### Magnetic (F grade)
+**Problem**: the model produces a smooth monotonic Kp (1.30 -> 1.91) while
+observations oscillate 1.3-2.3. The source is a constant 17.7 energy/yr, so
+all variability must arrive through the solar coupling — which delivers
+`c*eta*E_solar = 0.015 x 0.15 x 180 ~ 0.4` energy/yr against that source,
+about **2%**. It is structurally unable to oscillate.
+
+**Next step**: a solar-modulated magnetic source term, or much stronger
+solar->magnetic coupling. Justify either against data — do not fit it to
+2010-2024 and then report a 2010-2024 score.
 
 ### Cross-system validation
 **Problem**: current scoring treats each system independently.  CEED's
@@ -141,10 +166,29 @@ would test the coupling matrix directly.
 # 1. Change a parameter in convergence_model.py
 # 2. Run tests
 python -m pytest -q
-# 3. Run hindcast
+# 3. Run the in-sample hindcast
 python -m simulation.hindcast --compare
-# 4. Check scores — did they improve?
+# 4. Run the held-out split — THIS is the one that decides
+python -m simulation.validation
 # 5. If atmospheric R² dropped, you broke the energy budget
 # 6. If oceanic R² dropped, coupling or A_0 is off
-# 7. Commit if scores improved
+# 7. Commit only if the TEST score improved, or if the change is
+#    derived from physics rather than fitted
 ```
+
+**"Commit if scores improved" was the old rule and it was wrong.** Improving
+the in-sample score is trivial — add parameters. The oceanic subsystem scores
++0.773 in-sample and **-2.705** held out, which is what that rule produces if
+you follow it long enough.
+
+Two questions before committing a parameter change:
+
+1. Did the **test** score improve, or only the train score?
+2. Is the new value **derived** from something (a timescale, a conservation
+   law, a published measurement) or was it dialled until the number looked
+   good? Derived constants generalise. The solar fix is the worked example:
+   derived from the model's own linearisation, and the only subsystem with a
+   negative train-test gap.
+
+A parameter fitted on 2010-2024 and then scored on 2010-2024 tells you
+nothing except that the optimiser worked.

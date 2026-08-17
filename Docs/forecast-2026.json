@@ -1,0 +1,289 @@
+{
+  "issued": 2026,
+  "initialised_from": 2024,
+  "interval_sigma": 2.0,
+  "interval_basis": "held-out test RMSE from simulation/validation.py",
+  "model_has_enso": false,
+  "predictions": [
+    {
+      "system": "solar",
+      "year": 2025,
+      "value": 176.0357560402137,
+      "lower": 122.03782546020963,
+      "upper": 230.03368662021776,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "resolvable now"
+    },
+    {
+      "system": "magnetic",
+      "year": 2025,
+      "value": 2.2292470111732046,
+      "lower": 1.4880682330647415,
+      "upper": 2.9704257892816677,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "resolvable now"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2025,
+      "value": 1.4947569195900545,
+      "lower": 1.1742487936878474,
+      "upper": 1.8152650454922616,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "resolvable now"
+    },
+    {
+      "system": "oceanic",
+      "year": 2025,
+      "value": 22.701216318595993,
+      "lower": 15.85828794523843,
+      "upper": 29.544144691953555,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "resolvable now"
+    },
+    {
+      "system": "solar",
+      "year": 2026,
+      "value": 165.46268613932014,
+      "lower": 111.46475555931607,
+      "upper": 219.4606167193242,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "resolving"
+    },
+    {
+      "system": "magnetic",
+      "year": 2026,
+      "value": 2.173079515060759,
+      "lower": 1.4319007369522958,
+      "upper": 2.914258293169222,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "resolving"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2026,
+      "value": 1.5183222746306857,
+      "lower": 1.1978141487284786,
+      "upper": 1.8388304005328928,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "resolving"
+    },
+    {
+      "system": "oceanic",
+      "year": 2026,
+      "value": 22.897993607877552,
+      "lower": 16.05506523451999,
+      "upper": 29.740921981235115,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "resolving"
+    },
+    {
+      "system": "solar",
+      "year": 2027,
+      "value": 146.02517064385825,
+      "lower": 92.02724006385418,
+      "upper": 200.0231012238623,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "prospective"
+    },
+    {
+      "system": "magnetic",
+      "year": 2027,
+      "value": 2.12725286600039,
+      "lower": 1.3860740878919269,
+      "upper": 2.868431644108853,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2027,
+      "value": 1.5402943263157036,
+      "lower": 1.2197862004134965,
+      "upper": 1.8608024522179107,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "oceanic",
+      "year": 2027,
+      "value": 23.089314524452398,
+      "lower": 16.246386151094836,
+      "upper": 29.93224289780996,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "prospective"
+    },
+    {
+      "system": "solar",
+      "year": 2028,
+      "value": 120.32482192005406,
+      "lower": 66.32689134005,
+      "upper": 174.32275250005813,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "prospective"
+    },
+    {
+      "system": "magnetic",
+      "year": 2028,
+      "value": 2.0885869600603137,
+      "lower": 1.3474081819518506,
+      "upper": 2.829765738168777,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2028,
+      "value": 1.5603357530521276,
+      "lower": 1.2398276271499205,
+      "upper": 1.8808438789543347,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "oceanic",
+      "year": 2028,
+      "value": 23.27434052958236,
+      "lower": 16.4314121562248,
+      "upper": 30.117268902939923,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "prospective"
+    },
+    {
+      "system": "solar",
+      "year": 2029,
+      "value": 94.10920879509982,
+      "lower": 40.11127821509576,
+      "upper": 148.10713937510388,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "prospective"
+    },
+    {
+      "system": "magnetic",
+      "year": 2029,
+      "value": 2.0552008226043617,
+      "lower": 1.3140220444958985,
+      "upper": 2.7963796007128248,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2029,
+      "value": 1.578395074857477,
+      "lower": 1.25788694895527,
+      "upper": 1.8989032007596842,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "oceanic",
+      "year": 2029,
+      "value": 23.452998404660825,
+      "lower": 16.610070031303263,
+      "upper": 30.295926778018387,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "prospective"
+    },
+    {
+      "system": "solar",
+      "year": 2030,
+      "value": 74.22403771785022,
+      "lower": 20.226107137846164,
+      "upper": 128.2219682978543,
+      "units": "sfu",
+      "test_r2": 0.5552615392359342,
+      "expectation": "expect skill",
+      "band": "prospective"
+    },
+    {
+      "system": "magnetic",
+      "year": 2030,
+      "value": 2.026387610520782,
+      "lower": 1.285208832412319,
+      "upper": 2.767566388629245,
+      "units": "Kp",
+      "test_r2": 0.0567548401127157,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "atmospheric",
+      "year": 2030,
+      "value": 1.5947726871289785,
+      "lower": 1.2742645612267713,
+      "upper": 1.9152808130311856,
+      "units": "K",
+      "test_r2": 0.04174012342028921,
+      "expectation": "marginal",
+      "band": "prospective"
+    },
+    {
+      "system": "oceanic",
+      "year": 2030,
+      "value": 23.62616305027713,
+      "lower": 16.783234676919566,
+      "upper": 30.46909142363469,
+      "units": "10^22 J",
+      "test_r2": -2.704562398963764,
+      "expectation": "expect NO skill (flat line beats it)",
+      "band": "prospective"
+    }
+  ],
+  "falsification": [
+    "solar: FALSIFIED if fewer than half of the observed values fall inside their intervals, or if a flat line at the 2024 value scores a better RMSE over 2025-2030.",
+    "magnetic: this forecast is published EXPECTED TO FAIL (out-of-sample R2 = +0.057). The prediction under test is the failure itself. It would be a surprise \u2014 and evidence against validation.py \u2014 if it verified well.",
+    "atmospheric: this forecast is published EXPECTED TO FAIL (out-of-sample R2 = +0.042). The prediction under test is the failure itself. It would be a surprise \u2014 and evidence against validation.py \u2014 if it verified well.",
+    "oceanic: this forecast is published EXPECTED TO FAIL (out-of-sample R2 = -2.705). The prediction under test is the failure itself. It would be a surprise \u2014 and evidence against validation.py \u2014 if it verified well.",
+    "atmospheric, directional: the model has no ENSO term while a very strong El Nino is developing, so the 2026 and 2027 predictions are expected to run COLD. If they run WARM instead, the stated reason for the miss is wrong.",
+    "atmospheric, quantitative: the forecast warms at +0.020 K/yr against an observed 2010-2024 trend of +0.036, i.e. 0.56x. Predicted miss is LOW. A high miss falsifies the explanation even if the magnitude happens to fit.",
+    "oceanic, quantitative: the forecast accumulates at +0.185 10^22 J/yr against an observed +0.855, i.e. 0.22x \u2014 under-predicting by roughly 4.6x. By 2030 that is a shortfall of about 4.0 10^22 J. This is the specific failure predicted; if oceanic instead tracks observations, validation.py's -2.705 was misleading and needs re-examining.",
+    "whole model: FALSIFIED as a forecasting tool if the mean out-of-sample R2 across subsystems over 2025-2030 is negative, i.e. the ensemble is beaten by persistence."
+  ],
+  "resolution_sources": {
+    "solar": "NOAA SWPC / NRCan Penticton F10.7 annual mean, sfu",
+    "magnetic": "GFZ Potsdam Kp annual mean",
+    "atmospheric": "NASA GISTEMP v4 + 0.19 K offset to 1850-1900 base",
+    "oceanic": "NOAA/NCEI 0-700m OHC anomaly, 10^22 J"
+  }
+}

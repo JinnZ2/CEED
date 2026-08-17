@@ -29,7 +29,11 @@ CEED/
 │   ├── minimum_esm_code.py          # 2-variable Earth System Model (T, CO2)
 │   ├── mhd_spatial_model.py         # MHD injection, torque, dynamo, zone coupling
 │   ├── unit_bridge.py               # Energy indices <-> physical observables
-│   └── hindcast.py                  # Validation against 2010-2024 observations
+│   ├── hindcast.py                  # Validation against 2010-2024 observations
+│   ├── validation.py                # Held-out train/test split
+│   ├── tipping.py                   # Bistability, hysteresis, commitment
+│   ├── cascade.py                   # Coupled tipping elements (cascades)
+│   └── forecast.py                  # Pre-registered prospective forecast
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
 │   └── run_mc.py                    # Monte Carlo uncertainty analysis
@@ -56,6 +60,10 @@ CEED/
 | Run ESM | `python simulation/minimum_esm_code.py --plot` |
 | Run Monte Carlo | `python experiments/run_mc.py --n 200 --horizon 10` |
 | Run hindcast | `python -m simulation.hindcast --compare` |
+| Held-out validation | `python -m simulation.validation` |
+| Tipping elements | `python simulation/tipping.py` |
+| Tipping cascades | `python simulation/cascade.py` |
+| Prospective forecast | `python -m simulation.forecast` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
 
@@ -141,14 +149,36 @@ Current hindcast scores (anthropogenic model, 2010-2024):
 | Magnetic    | -0.21 | F     | Open — cannot track the cycle           |
 | **Mean**    | **+0.31** |   | Read the rows, not the average          |
 
-Two cautions when quoting these:
+**These are in-sample figures. Do not quote them as predictive skill.**
 
-1. **Mean R² is a weak summary** across four incommensurable subsystems. One
-   subsystem still scores worse than a flat line.
-2. **Atmospheric and oceanic are in-sample.** `A_0` and `atm_fraction` were
-   tuned against this same window, so those scores are not out-of-sample
-   skill. Solar is not in-sample — its constants come from the model's own
-   linearisation. A genuine test needs a held-out period.
+### Held-out validation (the number that matters)
+
+`python -m simulation.validation` splits the record: train 2010-2019, test
+2020-2024, one continuous trajectory, no re-initialisation at 2020.
+
+| System      | train R² | test R² | gap    |
+|-------------|----------|---------|--------|
+| solar       | -0.020   | **+0.555** | -0.575 |
+| magnetic    | -1.193   | +0.057  | -1.249 |
+| atmospheric | +0.316   | +0.042  | +0.274 |
+| oceanic     | **+0.773** | **-2.705** | **+3.478** |
+| **Mean**    | -0.031   | **-0.513** | +0.482 |
+
+Out of sample the shipped parameters are **beaten by a flat line** (mean test
+R² -0.513). Oceanic — the best-looking subsystem in-sample — is the worst
+offender, +0.773 train to -2.705 test.
+
+Solar is the one that generalises (test +0.555), and it is the one whose
+constants were **derived** from the model's linearisation rather than fitted.
+That is the lesson: derived constants travelled, fitted ones did not.
+
+Caveat: the test window is 5 years against an 11-year solar cycle, so this
+tests drift and extrapolation, not cycle physics.
+
+Two cautions when quoting any of these:
+
+1. **Mean R² is a weak summary** across four incommensurable subsystems.
+2. **Never quote the full-record scores as skill.** Use the held-out table.
 
 Magnetic is structurally unable to oscillate: its source is constant and the
 solar coupling carries only ~2% of its input. See finding 18 in
@@ -169,6 +199,113 @@ dCO2/dt = E_net(T) / alpha_CO2
 - C = 10.0 W yr/(m^2 K) — effective heat capacity
 - lambda_eff = F_2xCO2 / ECS — climate feedback parameter
 - F_2xCO2 = 3.7 W/m^2 — CO2 doubling forcing (Myhre et al. 1998)
+
+### Prospective Forecast (`simulation/forecast.py`)
+
+The only test here that cannot be gamed. Predictions issued before the outcome
+resolves, committed to git — the commit is the timestamp.
+
+Initialised from the last observation (2024), so everything is out of sample.
+Intervals are +/-2x the **held-out test RMSE**, never the in-sample fit.
+
+Key property: **it predicts its own failures.** Each prediction carries the
+subsystem's measured out-of-sample skill, so the forecast declares in advance
+which of its numbers it expects to be wrong — solar (+0.555) should verify,
+oceanic (-2.705) should not. If that pattern holds, `validation.py` is itself
+validated.
+
+Quantitative self-predictions, fixed at issue:
+
+- oceanic accumulates at +0.185 x10^22 J/yr against an observed +0.855,
+  under-predicting by ~4.6x, a ~4.0 shortfall by 2030
+- atmospheric warms at +0.020 K/yr against an observed +0.036, and runs COLD
+  because the model has no ENSO term while a very strong El Nino develops
+
+Full record: `Docs/forecast-2026.md` and `Docs/forecast-2026.json`.
+Resolve by adding observations to `unit_bridge.py` and re-running the
+hindcast from 2024. **Record the outcome in the falsification log either
+way** — a confirmed prediction is a result too.
+
+### Tipping Elements (`simulation/tipping.py`)
+
+A fast-slow bistable primitive. The convergence model has **one attractor** —
+four initial conditions spanning 250 to 1501 total energy all land within 0.05
+of each other after 200 years — so it cannot represent a system pushed into a
+new state that persists. This module supplies what is missing:
+
+```
+dx/dt = (x - x^3 + F(t) + noise) / tau_fast     internal state
+dh/dt = (x - h) / tau_slow                       observable response
+```
+
+Fold at |F| = 2/(3 sqrt 3) = 0.3849, x = +/-1/sqrt(3).
+
+- **Bistability**: two stable branches while |F| < 0.3849
+- **Hysteresis**: up-ramp switches at +0.399, down-ramp at -0.399
+- **Critical slowing down**: recovery time 0.50 -> 12.50 approaching the fold
+- **Commitment lag**: x crosses while h has moved 3.2% of its eventual change
+
+The commitment lag is the point. `tau_slow >> tau_fast` means the system is
+decided long before it looks decided.
+
+The shelf/sheet pair maps onto the two variables directly: `x` is ice SHELF
+integrity (floating, disintegrates in weeks to months), `h` is grounded ice
+SHEET mass (responds over centuries). They couple because the shelf buttresses
+the sheet. Shelf loss raises sea level by almost nothing directly — it is
+already floating — and matters because of what it stops holding back. The
+visible event is fast and nearly harmless; the consequence it commits to is
+slow and large.
+
+**Event-induced tipping** (`escape_probability`, `barrier_height`): a system
+can tip while the mean forcing stays below the fold, because a single discrete
+excursion clears the barrier. The barrier collapses from 0.250 at F=0 to
+0.00003 at F=0.384, so "safely below threshold" buys less and less.
+
+At F=0 — barrier at maximum, mean forcing nowhere near the fold — 27% of
+400-year trials still tip. Motivated by atmospheric rivers: ~3% of the time,
+but 40-80% of winter meltwater on peninsula shelves, with measured rain on
+Thwaites of 30 mm in summer and 9 mm in winter, driving hydrofracture.
+
+Tail shape matters, but only when the fold sits far from the typical event
+size. At 3.85x it, a heavy tail tips ~2x more often than a thin tail of
+identical mean AND variance; at 1.28x the ordering reverses (E11). Variance
+alone does not tell you the risk.
+
+Noise is pre-generated and passed in, never drawn inside the derivative.
+
+**Not integrated** into `ConvergencePredictor`. Wiring it in changes the
+model's character and is a maintainer decision.
+
+### Tipping Cascades (`simulation/cascade.py`)
+
+CEED is named for cascades and until now modelled none. N coupled elements:
+
+```
+dx_i/dt = (x_i - x_i^3 + F_i(t) + sum_j C_ij*phi_j + noise) / tau_fast_i
+dh_i/dt = (x_i - h_i) / tau_slow_i
+phi_j   = (h_j + 1)/2                    element j's tipped fraction
+```
+
+`C_ij` is j's effect on i. Positive destabilises, negative protects. The
+matrix is not symmetric — Thwaites->Ross is not Ross->Thwaites.
+
+**Coupling runs through the SLOW variable.** Influence only arrives as the
+source element actually responds, which makes cascades delay-dependent. That
+is the whole point: coupling through x would erase the effect that matters.
+Coupling uses `phi` rather than raw `h` so an intact network exerts no
+influence at t=0.
+
+Illustrative Thwaites/Ross configuration shows:
+
+- uncoupled, tipping Thwaites leaves Ross untouched
+- coupled at 0.55, Ross tips ~65 units later with no forcing of its own
+- domino threshold: 0.3853 minimum coupling for the cascade
+- Ross carries ~95% of the consequence and arrives last
+- a stabilising Ross->Thwaites link cannot help, because Ross needs
+  tau_slow=400 to respond and Thwaites tips at t=4. Sign is not enough;
+  a protective coupling slower than the collapse is worthless.
+
+Not calibrated. Do not read predictions out of it.
 
 ### Universal Framework (`CEED_universal_model.py`)
 

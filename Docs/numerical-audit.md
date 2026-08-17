@@ -34,6 +34,10 @@ them; the rest are open. Reproduce any figure with `pytest` and the module
 | 16 | Ap→Kp conversion did not reproduce its own table | `unit_bridge.py` | Medium | **RESOLVED** |
 | 17 | `pytest` collected zero tests | `Tests/` | High | **RESOLVED** |
 | 18 | Magnetic subsystem cannot track the solar cycle | `convergence_model.py` | Medium | **Open** |
+| 19 | Reported skill was in-sample; held-out test is far worse | `hindcast.py` | **Critical** | **Open** |
+| 20 | Single attractor: cannot represent a state transition | `convergence_model.py` | **Critical** | **Open** (primitive built) |
+| 21 | Nothing modelled a cascade, in a project named for cascades | repo-wide | High | **Primitive built** |
+| 22 | Thresholds treated as safety margins; events cross them anyway | `tipping.py` | High | **Primitive built** |
 
 ---
 
@@ -172,6 +176,123 @@ over days, not 14 months ([Parker & Linares 2024](https://arxiv.org/abs/2406.086
 trend, and no clear slowdown further north
 ([Carbon Brief](https://interactive.carbonbrief.org/amoc-explainer/index.html)).
 
+### 20 — One attractor, no memory: state transitions are unrepresentable
+
+The convergence model cannot represent the phenomenon the red team report is
+about. Integrated 200 years from four initial conditions:
+
+| initial total | final total |
+|---|---|
+| 250.2 | 495.0 |
+| 500.5 | 495.1 |
+| 800.8 | 495.1 |
+| 1501.5 | 495.1 |
+
+Spread: **0.05 energy units**. Every trajectory forgets where it started.
+
+The state-dependent parameters do not help. `effective_alpha('atmospheric')`
+evaluated at the baseline state and at 3× the baseline state, same `t`,
+returns the *identical* value (0.083608). It is a pure function of
+`(E_now, t)` — there is no history argument anywhere in the model. A shock of
+any magnitude leaves no trace once it passes.
+
+This matters because two observed systems do the opposite:
+
+- **Antarctic sea ice.** Slightly positive trend 1979–2015, then a break in
+  September 2016. Record lows in 2023–2025 sit inside the new regime rather
+  than being excursions from the old one, with "increased persistence in sea
+  ice extent anomalies and a strongly reduced tendency to return to the mean
+  state" ([Comms Earth & Environment, 2025](https://www.nature.com/articles/s43247-025-02107-5)).
+- **Marine ice sheets.** Tipping-element assessments describe components that
+  "can remain tipped even if the background climate falls back below the
+  threshold" — hysteresis, by definition.
+
+And [Nature Communications (2025)](https://www.nature.com/articles/s41467-025-66143-7)
+finds super El Niños (>2σ) drive "abrupt, persistent transitions ... for years
+or even decades" after the event fades.
+
+`simulation/tipping.py` supplies the missing primitive: a fast–slow bistable
+element with a fold at |F| = 0.3849, genuine hysteresis (loop width 0.797),
+critical slowing down (recovery time 0.50 → 12.50 approaching the fold), and a
+**commitment lag** — the internal state crosses while the observable has moved
+3.2% of its eventual change.
+
+That last quantity is the one a red team wants. Ice sheets are the clearest
+case: the Thwaites *eastern ice shelf* may break up within months, while
+*ice sheet* collapse unfolds over centuries to millennia. The dangerous
+property is not the speed — it is that the commitment passes silently and the
+response arrives centuries later.
+
+**Still open.** The primitive is standalone. It is not wired into
+`ConvergencePredictor`, so the convergence model retains its single attractor.
+Integrating it is a modelling decision, not a bug fix, and is left to the
+maintainer.
+
+### 21 — Nothing in the repository modelled a cascade
+
+CEED stands for **C**ascading Energetic Event Disruption. Until
+`simulation/cascade.py` nothing in it modelled one. The convergence model has
+a coupling matrix, but with a single attractor (finding 20) there is nothing
+to cascade — coupled reservoirs exchange energy and settle, they do not tip
+each other.
+
+`cascade.py` couples N bistable elements, with influence arriving through
+each element's SLOW variable so cascades are delay-dependent. On the
+illustrative Thwaites/Ross pair: uncoupled, tipping Thwaites leaves Ross
+untouched; coupled at 0.55, Ross tips ~65 units later with no forcing of its
+own; the domino threshold is 0.3853.
+
+Two results worth carrying forward, both from the demo rather than asserted:
+
+- **Consequence and proximity are inversely ordered.** Thwaites sits closest
+  to its threshold and carries ~5% of the consequence. Ross is far from its
+  threshold and carries ~95%. The element that tips first is not the one that
+  matters.
+- **Sign is not enough — timing decides.** A stabilising Ross→Thwaites link of
+  any strength fails to protect Thwaites, because Ross needs `tau_slow = 400`
+  to respond while Thwaites tips at `t = 4`. A protective coupling slower than
+  the collapse it is meant to prevent is worthless. This is why the
+  interacting-tipping-element literature makes these relationships contingent
+  on rate and delay rather than sign alone.
+
+**Not calibrated.** The configuration is illustrative and chosen to expose the
+asymmetry. It is not wired into `ConvergencePredictor`.
+
+### 22 — A threshold is not a safety margin
+
+Bifurcation tipping needs the mean forcing to reach the fold. Event-induced
+tipping does not — a single discrete excursion can clear the barrier while the
+mean sits comfortably in the safe range.
+
+The barrier holding the lower branch collapses long before the fold is
+reached:
+
+| F | barrier |
+|---|---|
+| 0.000 | 0.25000 |
+| 0.200 | 0.08171 |
+| 0.300 | 0.02522 |
+| 0.384 | **0.00003** |
+
+A factor of ~7000 between F=0 and F=0.384. In Monte Carlo with rare discrete
+events (rate 0.05/yr, mean magnitude 0.10), **27% of 400-year trials tip with
+the mean forcing at exactly zero** — barrier at its maximum, fold nowhere near.
+
+This is motivated by the atmospheric-river mechanism: ARs occupy ~3% of the
+time but drive 40–80% of winter meltwater on peninsula ice shelves, with
+measured rain on Thwaites reaching 30 mm in summer and 9 mm in winter. Surface
+meltwater fills crevasses and hydrofractures the shelf — the mechanism that
+removed Larsen B in five weeks.
+
+**Tail shape matters, but conditionally.** With identical mean and variance,
+a heavy-tailed event distribution tips ~2× more often than a thin-tailed one
+*when the fold sits 3.85× the typical event size away*. At 1.28× the ordering
+reverses. The crossover is the finding: risk depends on the ratio of threshold
+to typical event size, not on variance alone (E11 in the falsification log).
+
+**Not integrated.** Same standing as findings 20 and 21 — the primitive
+exists, `ConvergencePredictor` does not use it.
+
 ### 18 — The magnetic subsystem cannot track the solar cycle
 
 Magnetic remains the one failing subsystem: **R² = −0.214**, grade F. This is
@@ -187,14 +308,69 @@ stronger solar→magnetic coupling, justified against data rather than fitted.
 It was left alone here deliberately: tuning it against the same 2010–2024
 window used to score it would not be evidence of anything.
 
-### Note on calibration circularity
+### 19 — The reported skill was in-sample, and it does not hold up
 
-Solar's improvement (13) comes from constants derived analytically from the
-model's own linearisation, not fitted to the hindcast — the hindcast is an
-independent check on that derivation. The anthropogenic parameters (`A_0`,
-`atm_fraction`) were tuned against this same 2010–2024 window, so atmospheric
-and oceanic scores are in-sample and should not be read as out-of-sample
-skill. A genuine test needs a held-out period.
+Every score this project has quoted was measured on the window the parameters
+were tuned against. `simulation/validation.py` splits the record — train
+2010–2019, test 2020–2024 — and the result changes the story.
+
+The split is enforced two ways. The model is initialised at 2010 and
+integrated straight through 2024 without re-initialisation, so the test years
+are a free-running five-year forecast rather than a warm start. And the solar
+modulation, which is *derived* from the observed F10.7 amplitude, is
+re-derived from the train window alone — over the full record that amplitude
+includes the 2024 maximum of 180 sfu, which sits in the test window, so the
+shipped constant leaks (0.485 full-record vs **0.337** train-only).
+
+**Shipped parameters, scored out-of-sample:**
+
+| System | train R² (2011–2019) | test R² (2020–2024) | gap |
+|---|---|---|---|
+| solar | −0.020 | **+0.555** | −0.575 |
+| magnetic | −1.193 | +0.057 | −1.249 |
+| atmospheric | +0.316 | +0.042 | +0.274 |
+| oceanic | **+0.773** | **−2.705** | **+3.478** |
+| **mean** | −0.031 | **−0.513** | +0.482 |
+
+**Refitted on 2010–2019 only, no leakage:**
+
+| System | train R² | test R² | gap |
+|---|---|---|---|
+| solar | +0.197 | +0.493 | −0.296 |
+| magnetic | −1.191 | +0.060 | −1.250 |
+| atmospheric | +0.545 | +0.137 | +0.408 |
+| oceanic | +0.915 | **−0.469** | +1.384 |
+| **mean** | +0.117 | **+0.055** | +0.061 |
+
+Three things follow.
+
+**The +0.312 full-record mean is not a skill estimate.** Held out, the shipped
+parameters score a mean test R² of **−0.513** — worse, on average, than a flat
+line through the test window's own mean.
+
+**Oceanic is the overfit.** It is the subsystem that looked strongest
+(+0.631, grade B on the full record) and it fails hardest out of sample:
++0.773 → **−2.705**, a gap of 3.478. Refitting without leakage roughly halves
+the damage (−0.469) but does not remove it. The ocean term is fitting a
+monotonic trend and cannot extrapolate it.
+
+**Solar generalises, which is the one real result.** Its correction came from
+the model's own linearisation rather than from fitting (finding 13), and it is
+the only subsystem with a *negative* gap under both parameter sets — test
++0.555 shipped, +0.493 refitted. Derived constants travelled; fitted ones did
+not.
+
+Caveat on the caveat: the test window is 5 years against an 11-year solar
+cycle, so this cannot test cycle physics. It tests drift, bias, and
+extrapolation. `test_calibration_cannot_see_the_test_window` poisons every
+test-window observation and asserts the fitted parameters do not move, so the
+separation is verified rather than assumed.
+
+Run it:
+
+```bash
+python -m simulation.validation
+```
 
 ---
 
@@ -226,3 +402,6 @@ skill. A genuine test needs a held-out period.
 
 A mean R² is a weak summary across four incommensurable subsystems — read the
 rows, not the average. One subsystem still scores worse than a flat line.
+
+**These are in-sample figures.** For out-of-sample skill see finding 19: held
+out on 2020–2024, the shipped parameters score a mean test R² of −0.513.
