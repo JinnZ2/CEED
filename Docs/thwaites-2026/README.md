@@ -6,7 +6,7 @@ The [full supplied audit](thwaites_simulators_risk_audit.md) connects Thwaites G
 
 The audit is relevant to [tipping and commitment lag](../../simulation/tipping.py) and [coupled tipping elements](../../simulation/cascade.py). Those links identify existing mechanisms to investigate; this documentation import does not add a calibrated Thwaites model, modify simulation parameters, or wire the audit into the convergence model. Read the [numerical audit](../numerical-audit.md) before interpreting model numbers.
 
-The companion copy is maintained under [`JinnZ2/Simulators/AMOC/studies/thwaites-2026`](https://github.com/JinnZ2/Simulators/tree/docs/thwaites-2026-risk-audit/AMOC/studies/thwaites-2026).
+The companion copy is maintained under [`JinnZ2/Simulators/AMOC/studies/thwaites-2026`](https://github.com/JinnZ2/Simulators/tree/main/AMOC/studies/thwaites-2026).
 
 ## Supplied materials and provenance
 
@@ -30,3 +30,7 @@ Statements that tools were cloned and run, and the numerical outputs quoted in t
 The chain example uses explicitly synthetic, arbitrary-unit values; it is not a calibrated glacier forecast. The audit also explicitly leaves the Southern-Ocean-to-AMOC transfer path **UNMEASURED**. Its box-model response and declared Sv-to-F calibration must not be treated as measured routing or a real-world collapse threshold.
 
 Section 9 carries the source date **2026-09-24**, preserved as supplied. Its time-sensitive ENSO statements and illustrative melt arithmetic have not been independently validated in this import; the source itself labels the arithmetic as declared, not a result.
+
+## Further reading to investigate
+
+The [multilingual citation backlog](CITATION_BACKLOG.md) adds three September 2026 papers and three older 2026 references with specific follow-up questions. All six papers are English-language; non-English discovery sources are labeled separately. No qualifying original non-English paper was verified in the bounded 1–23 September search. These citations are a reading queue, not completed simulator analyses.
