@@ -5,6 +5,8 @@ Cascading Energy Event Disruption Simulator
 
 [CEED Model Specification](./Docs/CEED-model-specs.md)
 
+[Thwaites Glacier 2026 Risk Audit](./Docs/thwaites-2026/README.md) — supplied study audit, cascade and commitment questions, and AMOC transfer limits; original attachments preserved
+
 # CEED: Cascading Energetic Event Disruption
 
 **Co-Creators:**  
@@ -80,7 +82,8 @@ CEED/
 │   ├── CEED-model-specs.md                Foundational equations and design decisions
 │   ├── calibration-guide.md               How to tune parameters against data
 │   ├── forecast-2026.md                   Pre-registered forecast, issued 2026
-│   └── numerical-audit.md                 Parameter, threshold, and units audit
+│   ├── numerical-audit.md                 Parameter, threshold, and units audit
+│   └── thwaites-2026/                     Supplied Thwaites risk audit and source archive
 ├── Tests/                                 pytest suite
 ├── legacy/                                Superseded versions + falsification record
 └── LICENSE
