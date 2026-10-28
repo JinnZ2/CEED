@@ -33,6 +33,7 @@ CEED/
 │   ├── validation.py                # Held-out train/test split
 │   ├── tipping.py                   # Bistability, hysteresis, commitment
 │   ├── cascade.py                   # Coupled tipping elements (cascades)
+│   ├── radiation_belt.py            # Belt barrier slot, event-induced crossing (reads magnetic)
 │   └── forecast.py                  # Pre-registered prospective forecast
 ├── Tests/                           # Pytest suite (bare `pytest` collects all)
 ├── experiments/
@@ -63,6 +64,7 @@ CEED/
 | Held-out validation | `python -m simulation.validation` |
 | Tipping elements | `python simulation/tipping.py` |
 | Tipping cascades | `python simulation/cascade.py` |
+| Radiation-belt barrier | `python -m simulation.radiation_belt` |
 | Prospective forecast | `python -m simulation.forecast` |
 | Run dashboard | `streamlit run dashboard_starter.py` |
 | License | MIT |
@@ -306,6 +308,29 @@ Illustrative Thwaites/Ross configuration shows:
   a protective coupling slower than the collapse is worthless.
 
 Not calibrated. Do not read predictions out of it.
+
+### Radiation-belt barrier (`simulation/radiation_belt.py`)
+
+Added 2026-10-28 (co-authored) from the May 2024 superstorm: Arase saw
+multi-MeV electrons inside the 2014 "impenetrable barrier", CALET a new
+population at L 2.2-3.2 lasting months. See `Docs/arase-may2024/`.
+
+Two stores, outside and inside the barrier, driven by the magnetic column
+converted to Kp (`ConvergencePredictor.radiation_belt(t, solution, storms,
+barrier_kp)`). Opt-in and read-only: the ODE, hindcast and held-out tables
+are byte-identical with it present.
+
+- The barrier is a reading of its window (`characterized_barrier` = largest
+  Kp seen there), not a wall. Mean Kp 2.0 against a barrier of 6.26: 90% of
+  ten-year runs cross with heavy-tailed storms, 78.5% with thin ones of the
+  same mean and variance (200 runs each).
+- **Kp ceiling.** Kp is defined on 0..9. A barrier mapped on a window that
+  already reached 9 reads `AT_CEILING` and cannot be crossed by this driver:
+  the instrument has no reading above its ceiling. With heavy tails 34.5% of
+  runs hit Kp 9. An unsaturated storm index (Dst, SYM-H) is not in CEED.
+- Only the inner e-folding (41 d, CALET >1.5 MeV, L 2.8-3.2, VERIFY) is
+  carried from literature. Store units, injection and outer-belt constants
+  are ILLUSTRATIVE. Not calibrated; no feedback into the ODE (days vs months).
 
 ### Universal Framework (`CEED_universal_model.py`)
 
