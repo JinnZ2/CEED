@@ -10,6 +10,8 @@ Cascading Energy Event Disruption Simulator
 
 [Thwaites Glacier 2026 Risk Audit](./Docs/thwaites-2026/README.md) — supplied study audit, cascade and commitment questions, and AMOC transfer limits; original attachments preserved
 
+[Arase May 2024 superstorm](./Docs/arase-may2024/README.md) — multi-MeV electrons inside the "impenetrable barrier"; press-release depth, documentation only
+
 # CEED: Cascading Energetic Event Disruption
 
 **Co-Creators:**  

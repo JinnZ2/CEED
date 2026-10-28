@@ -28,6 +28,7 @@ We are not predicting doom—we are preparing for discontinuity.
 ###  Magnetospheric Instability
 - Persistent ring current strength since May 2024
 - Van Allen belts not dissipating normally
+  - Note 2026-10-28: CALET (arXiv:2602.03990) measured a new relativistic-electron population at L 2.2-3.2 after May 2024 lasting months (over 5 months above 1.5 MeV); Arase (Miyoshi et al. 2026, GRL) saw multi-MeV electrons inside the 2014 "impenetrable barrier". Persistence is measured; "not normally" still needs a stated baseline decay time at the same L and energy. See [Docs/arase-may2024](Docs/arase-may2024/README.md). Original line kept.
 - Earth's dipole field weakening 9–10% per decade in select zones
 
 **Risk:** Ring current saturation + CME = geomagnetic collapse scenario
