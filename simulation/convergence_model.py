@@ -523,6 +523,20 @@ class ConvergencePredictor:
         solution = odeint(self.energy_derivative, E0, t)
         return t, solution
 
+    def radiation_belt(self, t: np.ndarray, solution: np.ndarray,
+                       storms, barrier_kp: float):
+        """Read the magnetic column into the radiation-belt barrier slot.
+
+        Opt-in and read-only: the ODE and every default output are unchanged.
+        Converts the magnetic trajectory to Kp, adds pre-generated storms, and
+        tracks stores outside and inside the barrier. See
+        simulation/radiation_belt.py and Docs/arase-may2024/. Units of the
+        stores are ILLUSTRATIVE.
+        """
+        from simulation.radiation_belt import belt_from_magnetic
+        return belt_from_magnetic(t, solution[:, SYSTEMS.index('magnetic')],
+                                  storms, barrier_kp)
+
     def classify_phases(self, solution: np.ndarray) -> Tuple[np.ndarray, list]:
         """Classify each timestep into a phase based on total energy.
 

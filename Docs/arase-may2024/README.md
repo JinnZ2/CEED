@@ -1,6 +1,6 @@
 # Arase, May 2024 superstorm: multi-MeV electrons inside the "impenetrable barrier"
 
-Note 2026-10-28: co-authored, human + Claude. Documentation import only. No simulation code, parameter or threshold is changed.
+Note 2026-10-28: co-authored, human + Claude. Documentation import, then wired in the same day at the owner's request (see table below). No existing parameter or threshold changed.
 
 ## The study
 
@@ -29,8 +29,8 @@ CALET lifetimes as read (VERIFY against the paper): >1.5 MeV persisted over 5 mo
 | CEED piece | Bearing |
 |---|---|
 | [red-team report](../../red-team-report.md), "Van Allen belts not dissipating normally" | CALET measures months-long persistence of a new low-L population after May 2024. Whether that is "not normal" needs a stated baseline of decay times at the same L and energy; none is given in either document. See the dated note beside that line. |
-| [`simulation/tipping.py`](../../simulation/tipping.py), event-induced tipping | Same shape (PROPOSED): a boundary that holds under the typical range is crossed by one large excursion. A boundary characterized on moderate storms is a reading of those storms, not a wall. |
-| Magnetic subsystem (Kp proxy, held-out test R² +0.057, finding 18 in [numerical-audit](../numerical-audit.md)) | Kp is a global index; it cannot carry where in L energy is deposited. This event is a case the current magnetic representation has no slot for. Out of scope to wire in here; maintainer decision. |
+| [`simulation/tipping.py`](../../simulation/tipping.py), event-induced tipping | Wired 2026-10-28 in [`simulation/radiation_belt.py`](../../simulation/radiation_belt.py): storms from `tipping.generate_events`; the barrier is the largest Kp of its characterization window; mean Kp far below it, one storm from the tail crosses. |
+| Magnetic subsystem (Kp proxy, held-out test R² +0.057, finding 18 in [numerical-audit](../numerical-audit.md)) | Wired 2026-10-28 (owner's decision): `ConvergencePredictor.radiation_belt` reads the magnetic column into two stores, outside and inside the barrier. Read-only; hindcast and validation output byte-identical. Found while wiring: Kp saturates at 9, so a barrier mapped on a window that reached Kp 9 cannot be crossed by a Kp driver (`AT_CEILING`). CEED has no unsaturated storm index. |
 
 ## Evidence boundary
 
