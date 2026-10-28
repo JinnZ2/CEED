@@ -34,3 +34,16 @@ Section 9 carries the source date **2026-09-24**, preserved as supplied. Its tim
 ## Further reading to investigate
 
 The [multilingual citation backlog](CITATION_BACKLOG.md) adds three September 2026 papers and three older 2026 references with specific follow-up questions. All six papers are English-language; non-English discovery sources are labeled separately. No qualifying original non-English paper was verified in the bounded 1–23 September search. These citations are a reading queue, not completed simulator analyses.
+
+## Note 2026-10-28: a second freshwater term since 2016 (co-authored)
+
+Mishra, Gayen & Naveira Garabato 2026, *Reversal of Antarctic Intermediate Water trends triggered by sea ice decline*, Nature Climate Change, doi:10.1038/s41558-026-02758-y. Read from press coverage only; the paper was not reachable.
+
+| | Freshwater term | Direction since 2016 | Water mass it feeds |
+|---|---|---|---|
+| This audit, CDW-AABW loop | ice-shelf basal melt (Thwaites, Amundsen Sea) | up | AABW, continental shelf |
+| AAIW study | summer sea-ice meltwater, about 3x -> 2x the Amazon's annual flow | down, about 6,600 km³/yr (0.21 Sv) | AAIW, toward the polar front |
+
+The sea-ice change is about 63x the CDW-attributable basal-melt term in `JinnZ2/earth-systems-physics` `layer_4_hydrosphere.py` (104.8 Gt/yr), computed in that repo's `aaiw_reversal_2026.py` (DERIVED). PROPOSED reading: a Southern Ocean freshwater budget that carries only the ice-shelf term is missing the larger moving term, if the stated melt volumes are net delivery rather than gross seasonal melt (VERIFY in the paper). The coverage does not mention ice-shelf meltwater, so whether the AAIW budget carries Thwaites is OWED.
+
+Both studies date their change from the 2015-16 sea-ice drop; Spira et al. 2026 (Nature Climate Change, doi:10.1038/s41558-026-02601-4) attribute that drop to wind-driven mixing over a thinned Winter Water layer. Nothing here is wired into CEED's models.
